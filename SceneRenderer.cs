@@ -164,6 +164,12 @@ public class SceneRenderer
             }
         }
 
+        // Wall Damage (Hole)
+        if (sim.WallDamaged)
+        {
+            DrawWallDamage(shakeX, shakeY);
+        }
+
         // Permanent Debris (Scorch marks)
         foreach (var d in sim.ScorchMarks)
         {
@@ -254,145 +260,37 @@ public class SceneRenderer
              if (y >= Height) return null;
         }
 
-        // Enhanced Unicode Sprites
-        var head = (dx: 0, dy: -4, c: '●'); 
-        var torsoT = (dx: 0, dy: -3, c: '▓'); 
-        var torsoB = (dx: 0, dy: -2, c: '█'); 
-        var legL = (dx: -1, dy: -1, c: '╱');
-        var legR = (dx: 1, dy: -1, c: '╲');
-        var armL = (dx: -1, dy: -3, c: '╱');
-        var armR = (dx: 1, dy: -3, c: '╲');
-        var hand = (dx: 1, dy: -3);
-        var blade = (dx: 0, dy: -1, c: '│');
+        // Use PoseRegistry to get the pose structure
+        var pose = Pose.Get(actor.PoseIndex, isSith);
 
-        if (isSith) 
-        {
-            head.c = '⍙'; // Sith Helmet
-            torsoT.c = '▒'; // Textured Robe
-            torsoB.c = '▓'; // Belt
-        }
-        else
-        {
-             torsoB.c = '≡'; // Belt
-        }
-
-        switch (actor.PoseIndex)
-        {
-            case 0: // Idle
-                if (isSith)
-                {
-                    armR = (1, -3, '╲');
-                    hand = (1, -3);
-                    blade = (1, 1, '╲'); 
-                }
-                else
-                {
-                     armR = (1, -3, '╲');
-                     blade = (1, -1, '╱');
-                }
-                break;
-            case 1: // Attack
-                head = (2, -4, head.c); torsoT = (1, -3, '▓');
-                legL = (-2, -1, '╱'); legR = (2, -1, '╲');
-                armL = (-1, -3, '╲'); armR = (2, -4, '╱');
-                hand = (2, -4); blade = (1, -1, '╱');
-                break;
-            case 2: // Guard
-                head = (-1, -4, head.c); torsoT = (-1, -3, '▓');
-                legL = (-2, -1, '╱'); legR = (1, -1, '╲');
-                armR = (0, -3, '│');
-                hand = (0, -3); blade = (-1, -1, '╲');
-                break;
-            case 3: // Lock
-                head = (1, -4, head.c); torsoT = (1, -3, '█');
-                legL = (-2, -1, '╱'); legR = (2, -1, '╲');
-                armR = (1, -3, '─');
-                hand = (1, -3); blade = (1, 0, '─');
-                break;
-            case 4: // Kneel
-                head = (1, -2, isSith ? '⍙' : '●'); 
-                torsoT = (0, -1, '▄'); torsoB = (0, 0, ' ');
-                legL = (0, -1, ' '); legR = (2, -1, '▄');
-                armL = (0, 0, ' '); armR = (0, 0, ' ');
-                break;
-            case 5: // Anticipation
-                head = (-1, -4, head.c); torsoT = (-1, -3, '▓');
-                armR = (-2, -4, '╲');
-                hand = (-2, -4); blade = (-1, -1, '╲');
-                break;
-            case 6: // Force Push
-                head = (0, -4, head.c); torsoT = (0, -3, '▓');
-                armL = (2, -3, '─');
-                armR = (-1, -2, '╲');
-                hand = (-1, -2); blade = (1, 1, '╲');
-                break;
-            case 7: // Stagger
-                head = (-2, -4, head.c); torsoT = (-1, -3, '╲');
-                legL = (-2, -1, '╱'); legR = (1, -1, '╱');
-                armL = (-2, -3, '╱'); armR = (0, -3, '╲');
-                hand = (0, -3); blade = (-1, -1, '╲');
-                break;
-            case 8: // Jump
-                head = (1, -4, head.c); torsoT = (0, -3, '▓');
-                legL = (-1, -2, '─'); legR = (1, -2, '─');
-                armL = (-1, -3, '╱'); armR = (1, -3, '╲');
-                hand = (1, -3); blade = (-1, -1, '╱');
-                break;
-            case 9: // Suspended
-                head = (0, -4, head.c); torsoT = (0, -3, '▓');
-                legL = (-1, -1, '│'); legR = (1, -1, '│');
-                armL = (-2, -3, '╲'); armR = (2, -3, '╱');
-                hand = (2, -3); blade = (0, -1, '│');
-                break;
-            case 10: // Dash
-                head = (3, -3, head.c); torsoT = (2, -2, '─'); torsoB = (0, -2, '─');
-                legL = (-2, -2, '='); legR = (-1, -2, '=');
-                armL = (0, -2, '─'); armR = (3, -2, '─');
-                hand = (3, -2); blade = (1, 0, '─');
-                break;
-            case 11: // Crouch/Prep
-                head = (0, -2, head.c); torsoT = (0, -1, '▓'); torsoB = (0, 0, ' ');
-                legL = (-1, 0, '_'); legR = (1, 0, '_');
-                armL = (-1, -1, '╱'); armR = (1, -1, '╲');
-                hand = (1, -1); blade = (1, -1, '╱');
-                break;
-            case 12: // Reach Hilt
-                armR = (-1, -2, '╱');
-                hand = (-1, -2);
-                break;
-            case 13: // Walk A
-                break;
-            case 14: // Walk B
-                legL = (1, -1, '╲'); 
-                legR = (-1, -1, '╱');
-                break;
-        }
-
+        // Draw Cape (Sith only, not blur, not pose 4)
         if (isSith && actor.PoseIndex != 4 && !isBlur) DrawCape(actor);
 
+        // Handle Kneel Special Case (Simplified in Pose, but drawing order matters)
         if (actor.PoseIndex == 4)
         {
-            _term.Draw(x + (head.dx * dir), y + (isReflection ? -head.dy : head.dy), head.c, mainColor);
+            _term.Draw(x + (pose.Head.Dx * dir), y + (isReflection ? -pose.Head.Dy : pose.Head.Dy), pose.Head.Char, mainColor);
             _term.Draw(x, y - (isReflection ? -1 : 1), isReflection ? '▀' : '▄', mainColor);
             return null;
         }
 
-        DrawPart(x, y, dir, legL, isReflection, mainColor);
-        DrawPart(x, y, dir, legR, isReflection, mainColor);
-        DrawPart(x, y, dir, torsoB, isReflection, mainColor);
-        DrawPart(x, y, dir, torsoT, isReflection, mainColor);
-        DrawPart(x, y, dir, armL, isReflection, mainColor);
-        if (actor.PoseIndex != 3) DrawPart(x, y, dir, armR, isReflection, mainColor);
+        // Draw Parts
+        DrawPart(x, y, dir, pose.LegL, isReflection, mainColor);
+        DrawPart(x, y, dir, pose.LegR, isReflection, mainColor);
+        DrawPart(x, y, dir, pose.TorsoBottom, isReflection, mainColor);
+        DrawPart(x, y, dir, pose.TorsoTop, isReflection, mainColor);
+        DrawPart(x, y, dir, pose.ArmL, isReflection, mainColor);
+        if (actor.PoseIndex != 3) DrawPart(x, y, dir, pose.ArmR, isReflection, mainColor);
 
-        _term.Draw(x + (head.dx * dir), y + (isReflection ? -head.dy : head.dy), head.c, mainColor);
+        _term.Draw(x + (pose.Head.Dx * dir), y + (isReflection ? -pose.Head.Dy : pose.Head.Dy), pose.Head.Char, mainColor);
 
+        // Draw Saber
         (int x, int y)? tipPos = null;
-
         if (actor.SaberActive)
         {
-            int sx = x + (hand.dx * dir);
-            int sy = y + (isReflection ? -hand.dy : hand.dy);
-            char bChar = blade.c;
+            int sx = x + (pose.Hand.Dx * dir);
+            int sy = y + (isReflection ? -pose.Hand.Dy : pose.Hand.Dy);
+            char bChar = pose.Blade.Char;
             
             if (dir == -1)
             {
@@ -406,11 +304,11 @@ public class SceneRenderer
                 else if (bChar == '╲') bChar = '╱';
             }
 
-            int bdy = isReflection ? -blade.dy : blade.dy;
+            int bdy = isReflection ? -pose.Blade.Dy : pose.Blade.Dy;
 
             for (int k = 1; k <= actor.SaberLength; k++)
             {
-                int bx = sx + (blade.dx * dir * k);
+                int bx = sx + (pose.Blade.Dx * dir * k);
                 int by = sy + (bdy * k);
                 _term.Draw(bx, by, bChar, saberColor);
                 
@@ -418,6 +316,39 @@ public class SceneRenderer
             }
         }
         return tipPos;
+    }
+
+    private void DrawWallDamage(int ox, int oy)
+    {
+        // Hole at right wall (approx x=74..80, y=4..14)
+        // We draw "void" (spaces) and "rubble edges"
+        
+        for (int y = 4; y <= 14; y++)
+        {
+            for (int x = 74; x < 80; x++)
+            {
+                int sx = (int)(x * _scaleX) + ox;
+                int sy = (int)(y * _scaleY) + oy;
+
+                // Center of the hole is empty/dark
+                bool isCenter = (x > 75 && y > 5 && y < 13);
+                
+                if (isCenter)
+                {
+                    // Erase background
+                    _term.Draw(sx, sy, ' ', Palette.Dim);
+                    // Add some depth details occasionally
+                    if ((x+y)%3 == 0) _term.Draw(sx, sy, '░', Palette.Dim); 
+                }
+                else
+                {
+                    // Edges - jagged
+                    char c = (x+y)%2 == 0 ? '▙' : '▟';
+                    if (y == 4 || y == 14) c = '▄';
+                    _term.Draw(sx, sy, c, Palette.Dim);
+                }
+            }
+        }
     }
 
     private void DrawCape(Actor a)
@@ -470,9 +401,9 @@ public class SceneRenderer
         }
     }
 
-    private void DrawPart(int cx, int cy, int dir, (int dx, int dy, char c) part, bool reflect, string color)
+    private void DrawPart(int cx, int cy, int dir, BodyPart part, bool reflect, string color)
     {
-        char c = part.c;
+        char c = part.Char;
         if (reflect)
         {
             if (c == '╱') c = '╲';
@@ -480,7 +411,7 @@ public class SceneRenderer
             else if (c == '▄') c = '▀';
             else if (c == '▀') c = '▄';
         }
-        _term.Draw(cx + (part.dx * dir), cy + (reflect ? -part.dy : part.dy), c, color);
+        _term.Draw(cx + (part.Dx * dir), cy + (reflect ? -part.Dy : part.Dy), c, color);
     }
 
     private void DrawLine(int x0, int y0, int x1, int y1, char c, string color)
