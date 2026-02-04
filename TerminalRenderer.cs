@@ -6,8 +6,8 @@ namespace StarWarsAnimation
 {
     internal sealed class TerminalRenderer
     {
-        public const int Width = 80;
-        public const int Height = 25;
+        public readonly int Width;
+        public readonly int Height;
 
         struct Pixel
         {
@@ -15,7 +15,7 @@ namespace StarWarsAnimation
             public string Color;
         }
 
-        private readonly Pixel[,] _buffer = new Pixel[Height, Width];
+        private readonly Pixel[,] _buffer;
         private readonly StringBuilder _sb = new StringBuilder();
         private string _lastColor = "";
 
@@ -23,6 +23,26 @@ namespace StarWarsAnimation
         {
             Console.OutputEncoding = Encoding.UTF8;
             Console.CursorVisible = false;
+
+            try 
+            {
+                // Detect console size
+                Width = Console.WindowWidth;
+                Height = Console.WindowHeight;
+
+                // Sync buffer to window to prevent scrollbars/wrapping issues
+                // This is crucial for stability on Windows consoles
+                if (Console.BufferHeight != Height) Console.BufferHeight = Height;
+                if (Console.BufferWidth != Width) Console.BufferWidth = Width;
+            }
+            catch
+            {
+                // Fallback if access denied or handle invalid
+                Width = 80;
+                Height = 25;
+            }
+            
+            _buffer = new Pixel[Height, Width];
             Clear();
         }
 
@@ -74,9 +94,16 @@ namespace StarWarsAnimation
                     }
                     _sb.Append(p.Char);
                 }
-                _sb.Append('\n');
+                
+                // Prevent scrolling by not printing newline on the last row
+                if (y < Height - 1)
+                {
+                    _sb.Append('\n');
+                }
             }
             _sb.Append("\u001b[0m"); // Reset
+            
+            // Write everything at once
             Console.Write(_sb.ToString());
         }
     }
