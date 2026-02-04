@@ -19,16 +19,40 @@ public class DuelSimulation
     public float ZoomLevel { get; private set; } = 1.0f;
     public Vec2 CameraFocus { get; private set; } = new Vec2(40, 12);
     public bool IsFinished => _phase == Phase.Exit;
+    public float TimeScale { get; set; } = 1.0f;
+    public bool IsDarkness { get; private set; } = false;
     
     public List<Vec2> ScorchMarks { get; private set; } = new(); // Scars/Damage
     public bool WallDamaged { get; private set; }
     public List<DebrisChunk> DebrisChunks { get; private set; } = new();
+    public List<Spark> Smoke { get; private set; } = new();
+    public string Subtitle { get; private set; } = "";
+    
+    public string CrawlText = 
+@"EPISODE VII
+THE CLI AWAKENS
+
+It is a time of coding challenges.
+A lone JEDI KNIGHT defends the
+terminal from the dark side.
+
+A SITH LORD, master of bugs,
+seeks to crash the system.
+
+As pixels clash and cursors
+flash, the fate of the
+console hangs in the balance...";
+
+    public float Time => _time; // Expose for renderer
+    public Phase CurrentPhase => _phase; // Expose for renderer
 
     private float _time;
+    private float _phaseTimer;
     private Random _rng = new(123);
-    private Phase _phase = Phase.Establishment;
+    private Phase _phase = Phase.OpeningCrawl;
+    private int _blitzCount = 0;
 
-    private enum Phase { Establishment, FirstExchange, Escalation, WallDestruction, ForceSequence, SaberActionSequence, Climax, Resolution, FadeOut, Exit }
+    public enum Phase { OpeningCrawl, Establishment, FirstExchange, Escalation, WallDestruction, ForceSequence, Blackout, SpeedBlitz, RestoreLights, SaberActionSequence, Climax, Resolution, FadeOut, Exit }
 
     public void Initialize()
     {
@@ -42,17 +66,24 @@ public class DuelSimulation
 
     public void Update(float dt)
     {
+        dt *= TimeScale;
         _time += dt;
+        _phaseTimer += dt;
+        
         SavePrevPos(Jedi);
         SavePrevPos(Sith);
 
         switch (_phase)
         {
+            case Phase.OpeningCrawl: UpdateOpeningCrawl(); break;
             case Phase.Establishment: UpdateEstablishment(); break;
             case Phase.FirstExchange: UpdateFirstExchange(); break;
             case Phase.Escalation: UpdateEscalation(); break;
             case Phase.WallDestruction: UpdateWallDestruction(); break;
             case Phase.ForceSequence: UpdateForceSequence(); break;
+            case Phase.Blackout: UpdateBlackout(); break;
+            case Phase.SpeedBlitz: UpdateSpeedBlitz(dt); break;
+            case Phase.RestoreLights: UpdateRestoreLights(); break;
             case Phase.SaberActionSequence: UpdateSaberActionSequence(); break;
             case Phase.Climax: UpdateClimax(); break;
             case Phase.Resolution: UpdateResolution(); break;
@@ -62,7 +93,24 @@ public class DuelSimulation
         SimulateCape(Sith, dt);
         UpdateDebris(dt);
         UpdateSparks(dt);
+        UpdateSmoke(dt);
         UpdateLightning(dt);
+    }
+    
+    private void SetPhase(Phase p)
+    {
+        _phase = p;
+        _phaseTimer = 0;
+    }
+
+    private void UpdateOpeningCrawl()
+    {
+        // Crawl lasts 12 seconds (Slower read)
+        if (_phaseTimer > 12.0f) 
+        {
+            _time = 0; 
+            SetPhase(Phase.Establishment);
+        }
     }
 
     private void UpdateLightning(float dt)
@@ -78,55 +126,79 @@ public class DuelSimulation
 
     private void UpdateEstablishment()
     {
-        if (_time < 0.5f) { Jedi.PoseIndex = 0; Sith.PoseIndex = 0; }
+        if (_time < 0.5f) { Jedi.PoseIndex = 0; Sith.PoseIndex = 0; Subtitle = ""; }
         else if (_time < 1.0f) { Jedi.PoseIndex = 12; }
         else if (_time < 1.5f) { SetSaber(Jedi, true, 3); Jedi.PoseIndex = 0; }
+        else if (_time < 3.0f) { Subtitle = "JEDI: Surrender! The system is secure."; }
         
         if (_time > 1.2f && _time < 1.7f) { Sith.PoseIndex = 12; }
         else if (_time > 1.7f && _time < 2.0f) { SetSaber(Sith, true, 3); Sith.PoseIndex = 0; }
+        else if (_time > 3.0f && _time < 4.5f) { Subtitle = "SITH: Peace is a lie... there is only Bugs."; }
         
-        if (_time > 4.0f) _phase = Phase.FirstExchange;
+        if (_time > 4.5f) { Subtitle = ""; _phase = Phase.FirstExchange; }
     }
 
     private void UpdateFirstExchange()
     {
+        float t = _phaseTimer;
+        
         // Smooth Approach (Walk)
-        if (InRange(4.5f, 5.5f)) 
+        if (t < 1.0f) 
         { 
-            float t = (_time - 4.5f) / 1.0f;
-            Jedi.FX = Lerp(20, 32, t);
-            Sith.FX = Lerp(60, 48, t);
+            float p = t / 1.0f;
+            Jedi.FX = Lerp(20, 32, p);
+            Sith.FX = Lerp(60, 48, p);
             
             // Walk Animation (Swap legs every 0.15s)
-            int walkFrame = (int)(_time * 6) % 2;
+            int walkFrame = (int)(t * 6) % 2;
             Jedi.PoseIndex = 13 + walkFrame; 
             Sith.PoseIndex = 13 + walkFrame;
         }
-        else if (InRange(5.5f, 5.8f)) 
+        else if (t < 1.3f) 
         { 
+            // Idle wait
             Jedi.FX = 32; Sith.FX = 48;
             Jedi.PoseIndex = 0; Sith.PoseIndex = 0; 
         }
-
-        if (InRange(5.8f, 6.0f)) { SetPoses(5, 2); ZoomLevel = 1.2f; }
-        else if (InRange(6.0f, 6.2f)) 
+        else if (t >= 1.3f && t < 1.5f) 
         { 
+            // Windup - Move closer for the hit
+            Jedi.FX = 38; Sith.FX = 42;
+            SetPoses(5, 2); 
+            ZoomLevel = 1.2f; 
+        }
+        else if (t >= 1.5f && t < 1.7f) 
+        { 
+            // The Hit
+            Jedi.FX = 38; Sith.FX = 42;
             SetPoses(1, 1); 
-            SpawnSparks(40, 12, 3); 
-          ShakeScreen = true;
-            ZoomLevel = 1.4f; // Zoom in on impact
+            
+            // Spark only on first frame of hit
+            if (t >= 1.5f && t < 1.55f) 
+            {
+                SpawnSparks(40, 12, 3); 
+                ShakeScreen = true;
+            }
+            ZoomLevel = 1.4f; 
         } 
-        else if (_time >= 6.2f) { SetPoses(0, 0); ShakeScreen = false; ZoomLevel = 1.0f; }
+        else if (t >= 1.7f) 
+        { 
+            // Disengage
+            Jedi.FX = 32; Sith.FX = 48;
+            SetPoses(0, 0); 
+            ShakeScreen = false; 
+            ZoomLevel = 1.0f; 
+        }
 
         // Camera Tracking
         CameraFocus = new Vec2((Jedi.FX + Sith.FX)/2, 12);
 
-        if (_time > 8.0f) _phase = Phase.Escalation;
+        if (t > 3.0f) SetPhase(Phase.Escalation);
     }
 
     private void UpdateEscalation()
     {
-        float t = _time - 8.0f; 
+        float t = _phaseTimer; 
 
         if (TimeWindow(t, 0.2f, 1.0f)) Beat1_FastClash(t);
         else if (TimeWindow(t, 1.2f, 1.7f)) Beat2_Riposte(t);
@@ -139,27 +211,31 @@ public class DuelSimulation
 
         CameraFocus = new Vec2((Jedi.FX + Sith.FX)/2, 12);
 
-        if (_time > 17.0f) _phase = Phase.WallDestruction;
+        if (t > 9.0f) SetPhase(Phase.WallDestruction);
     }
 
     private void UpdateWallDestruction()
     {
-        float t = _time - 17.0f;
+        float t = _phaseTimer;
         
-        // 0.0 - 1.0: Preparation
-        if (t < 1.0f)
+        // 0.0 - 1.5: Preparation
+        if (t < 1.5f)
         {
             SetPoses(2, 6); // Jedi Guards, Sith Pulls
             Sith.FacingRight = false; // Face left towards Jedi
             Jedi.FacingRight = true;
             
+            // Shout: 0.2 - 1.5
+            if (t > 0.2f) Subtitle = "SITH: BREAK!";
+            
             // Wall Cracking Effect
             if (_rng.NextDouble() > 0.7) SpawnSparks(78, (int)(5 + _rng.NextDouble() * 10), 1);
             if (t > 0.5f) ShakeScreen = true;
         }
-        // 1.0 - 5.0: The Barrage
-        else if (t < 5.0f)
+        // 1.5 - 5.5: The Barrage
+        else if (t < 5.5f)
         {
+            Subtitle = "";
             ShakeScreen = false;
             WallDamaged = true;
             
@@ -232,21 +308,21 @@ public class DuelSimulation
                 SetPoses(2, 6); // Guard
             }
         }
-        // 5.0 - 6.0: Cooldown
-        else if (t < 6.0f)
+        // 5.5 - 6.5: Cooldown
+        else if (t < 6.5f)
         {
             ShakeScreen = false;
             SetPoses(0, 0);
         }
         else
         {
-            _phase = Phase.ForceSequence;
+            SetPhase(Phase.ForceSequence);
         }
     }
 
     private void UpdateForceSequence()
     {
-        float t = _time - 23.0f; // Adjusted for WallDestruction (+6s)
+        float t = _phaseTimer;
 
         if (t < 0.5f) SetPoses(0, 6); // Sith prepares
         else if (t < 2.5f) // Lightning Phase (2 seconds)
@@ -287,7 +363,80 @@ public class DuelSimulation
             Jedi.FY = 15;
             SetPoses(11, 5);
         }
-        else _phase = Phase.SaberActionSequence;
+        else SetPhase(Phase.Blackout);
+    }
+
+    private void UpdateBlackout()
+    {
+        float t = _phaseTimer;
+        
+        if (t < 0.5f) { /* Wait */ }
+        else if (t < 1.5f) 
+        { 
+            if (!IsDarkness)
+            {
+                 IsDarkness = true; 
+                 // Sith Roar/Power up logic?
+                 Sith.PoseIndex = 6; // Cast/Power
+            }
+        }
+        else
+        {
+            SetPhase(Phase.SpeedBlitz);
+            _blitzCount = 0;
+        }
+    }
+
+    private void UpdateSpeedBlitz(float dt)
+    {
+        float t = _phaseTimer;
+        int currentStep = (int)(t / 0.15f);
+        
+        if (currentStep > _blitzCount)
+        {
+            _blitzCount = currentStep;
+            
+            if (_blitzCount > 12) // End after 12 hits (~1.8s)
+            {
+                SetPhase(Phase.RestoreLights);
+                return;
+            }
+
+            // Random teleport logic
+            // Keep them somewhat centered
+            float cx = 40 + (float)(_rng.NextDouble() * 30 - 15);
+            float cy = 12 + (float)(_rng.NextDouble() * 10 - 5);
+            
+            Jedi.FX = cx - 2;
+            Sith.FX = cx + 2;
+            Jedi.FY = cy;
+            Sith.FY = cy;
+            
+            // Random poses
+            Jedi.PoseIndex = _rng.Next(1, 3);
+            Sith.PoseIndex = _rng.Next(1, 3);
+            
+            // Spark!
+            SpawnSparks((int)cx, (int)cy, 2);
+            ShakeScreen = true;
+        }
+        else
+        {
+            ShakeScreen = false;
+        }
+    }
+
+    private void UpdateRestoreLights()
+    {
+        IsDarkness = false;
+        ShakeScreen = false;
+        
+        // Reset positions for next sequence
+        Jedi.FX = 20; Sith.FX = 60;
+        Jedi.FY = 15; Sith.FY = 15;
+        SetPoses(2, 2);
+        
+        SetPhase(Phase.SaberActionSequence);
     }
 
     private void GenerateLightning(LightningBolt bolt, Vec2 start, Vec2 end)
@@ -313,7 +462,7 @@ public class DuelSimulation
 
     private void UpdateSaberActionSequence()
     {
-        float t = _time - 28.0f; // Adjusted: 17 + 6 (Wall) + 5 (Force) = 28s
+        float t = _phaseTimer;
 
         if (t < 0.2f) { SetPoses(11, 0); }
         else if (t < 1.0f)
@@ -367,39 +516,53 @@ public class DuelSimulation
              Jedi.FX = 38; Sith.FX = 42;
              SetPoses(0, 0);
         }
-        else _phase = Phase.Climax;
+        else SetPhase(Phase.Climax);
     }
 
     private void UpdateClimax()
     {
-        float t = _time - 36.0f; // Starts at 36s
+        float t = _phaseTimer;
 
         // 0.0 - 1.5: The final struggle (Lock)
         if (t < 1.5f)
         {
+             TimeScale = 1.0f;
              Jedi.FX = 38; Sith.FX = 42;
              SetPoses(3, 3); // Lock
              ShakeScreen = true; // Struggle shake
              ZoomLevel = 1.2f;
              if (_rng.NextDouble() > 0.6) SpawnSparks(40, 11, 1);
         }
-        // 1.5: THE KILL STROKE
-        else if (t < 2.5f)
+        // SLOW MOTION MOMENT
+        else if (t < 2.0f) 
         {
+             TimeScale = 0.1f; 
+             ZoomLevel = 1.4f; 
+             ShakeScreen = false; 
+        }
+        // 1.5: THE KILL STROKE
+        else if (t < 5.0f) // Extended for subtitles (was 3.0f)
+        {
+             TimeScale = 1.0f; // Snap back
              Jedi.FX = 39; Sith.FX = 42;
              SetPoses(10, 7); // Jedi Lunge (Stab), Sith Stagger
              
+             // Subtitle: 2.0 - 5.0
+             if (t > 2.0f && t < 5.0f) Subtitle = "JEDI: It is finished.";
+             else Subtitle = "";
+             
              // Visuals
              ShakeScreen = true;
-             SpawnSparks(41, 11, 8); // Intense sparks at impact point
+             if (t < 2.5f) SpawnSparks(41, 11, 8); // Intense sparks at impact point
              
              // Flash only on the frame of impact
-             if (t >= 1.5f && t < 1.6f) FlashScreen = true; 
+             if (t >= 2.0f && t < 2.1f) FlashScreen = true; 
              else FlashScreen = false;
         }
         // 2.5 - 4.0: The fall
-        else if (t < 4.0f)
+        else if (t < 6.5f)
         {
+             Subtitle = "";
              FlashScreen = false;
              ShakeScreen = false;
              ZoomLevel = 1.0f;
@@ -412,27 +575,30 @@ public class DuelSimulation
         }
         else
         {
-             _phase = Phase.Resolution;
+             SetPhase(Phase.Resolution);
         }
     }
 
     private void UpdateResolution()
     {
+        float t = _phaseTimer;
+
         FlashScreen = false;
         ShakeScreen = false;
         ZoomLevel = 1.0f;
+        TimeScale = 1.0f;
         
         SetPoses(0, 4); 
         SetSaber(Sith, false, 0);
         // Turn off Jedi saber after a moment
-        if (_time > 41.0f) SetSaber(Jedi, false, 0);
+        if (t > 2.0f) SetSaber(Jedi, false, 0);
         
-        if (_time > 43.0f) _phase = Phase.FadeOut;
+        if (t > 4.0f) SetPhase(Phase.FadeOut);
     }
 
     private void UpdateFadeOut()
     {
-        if (_time > 38.0f) _phase = Phase.Exit;
+        if (_phaseTimer > 4.0f) SetPhase(Phase.Exit);
     }
 
     private void Beat1_FastClash(float t)
@@ -642,6 +808,7 @@ public class DuelSimulation
                 {
                     ScorchMarks.Add(d.Pos); 
                     SpawnSparks((int)d.Pos.X, (int)d.Pos.Y, 2);
+                    SpawnSmoke((int)d.Pos.X, (int)d.Pos.Y, 3);
                 }
             }
 
@@ -650,6 +817,47 @@ public class DuelSimulation
 
         // Cleanup
         if (DebrisChunks.Count > 0 && DebrisChunks[0].Pos.X < -10) DebrisChunks.RemoveAt(0);
+    }
+
+    private void UpdateSmoke(float dt)
+    {
+        for (int i = Smoke.Count - 1; i >= 0; i--)
+        {
+            var s = Smoke[i];
+            s.Pos.Y -= s.Vel.Y * dt; // Rise up
+            s.Pos.X += s.Vel.X * dt; // Drift
+            s.Life -= dt;
+            Smoke[i] = s;
+
+            // FIX: Remove smoke if it drifts off screen to the left/right or dies
+            if (s.Life <= 0 || s.Pos.X < 0 || s.Pos.X > LogicWidth) Smoke.RemoveAt(i);
+        }
+        
+        // Ambient smoke from scorch marks
+        if (_rng.NextDouble() > 0.9)
+        {
+            foreach(var sm in ScorchMarks)
+            {
+                // Only spawn if valid
+                if (sm.X > 0 && sm.X < LogicWidth && _rng.NextDouble() > 0.95) 
+                    SpawnSmoke((int)sm.X, (int)sm.Y, 1);
+            }
+        }
+    }
+
+    private void SpawnSmoke(int x, int y, int count)
+    {
+        if (x < 0 || x > LogicWidth) return; // Prevent garbage smoke
+        
+        for (int i = 0; i < count; i++)
+        {
+            Smoke.Add(new Spark
+            {
+                Pos = new Vec2(x + (float)(_rng.NextDouble()*2-1), y),
+                Vel = new Vec2((float)(_rng.NextDouble()*1-0.5), (float)(_rng.NextDouble()*2 + 1)), // Upward
+                Life = (float)(_rng.NextDouble() * 2.0 + 1.0)
+            });
+        }
     }
 
     private void UpdateSparks(float dt)

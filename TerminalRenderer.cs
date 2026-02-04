@@ -74,6 +74,15 @@ namespace StarWarsAnimation
                 _buffer[y, x].Color = color;
             }
         }
+        
+        public void DrawString(int x, int y, string text, string color)
+        {
+            if (y < 0 || y >= Height) return;
+            for (int i = 0; i < text.Length; i++)
+            {
+                Draw(x + i, y, text[i], color);
+            }
+        }
 
         public void ApplyLighting(int lx, int ly, int radius, string color)
         {
@@ -94,6 +103,37 @@ namespace StarWarsAnimation
                         {
                             _buffer[y, x].Color = color;
                         }
+                    }
+                }
+            }
+        }
+
+        public void ApplyDarkness(List<(int x, int y, int r)> lights)
+        {
+            // Reset buffer to empty unless near a light
+            // Optimization: If no lights, clear screen?
+            // Actually, we need to iterate all pixels to check if they are near ANY light.
+            
+            for (int y = 0; y < Height; y++)
+            {
+                for (int x = 0; x < Width; x++)
+                {
+                    bool lit = false;
+                    foreach (var light in lights)
+                    {
+                        int dx = x - light.x;
+                        int dy = y - light.y;
+                        if (dx*dx + dy*dy <= light.r * light.r)
+                        {
+                            lit = true;
+                            break;
+                        }
+                    }
+
+                    if (!lit)
+                    {
+                        // Mask out
+                        _buffer[y, x].Char = ' ';
                     }
                 }
             }

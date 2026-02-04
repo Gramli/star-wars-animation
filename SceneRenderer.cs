@@ -86,11 +86,62 @@ public class SceneRenderer
         {
             _term.Fill('█', Palette.White);
         }
+        else if (sim.CurrentPhase == DuelSimulation.Phase.OpeningCrawl)
+        {
+            DrawOpeningCrawl(sim);
+        }
         else
         {
             RenderScene(sim);
+            
+            // UI Overlay
+            if (!string.IsNullOrEmpty(sim.Subtitle))
+            {
+                DrawSubtitle(sim.Subtitle);
+            }
         }
         _term.Present();
+    }
+    
+    private void DrawOpeningCrawl(DuelSimulation sim)
+    {
+        // Star Field Background
+        foreach (var s in sim.Stars)
+        {
+             _term.Draw((int)(s.X * _scaleX), (int)(s.Y * _scaleY), '.', Palette.Dim);
+        }
+        
+        // Perspective Text
+        string[] lines = sim.CrawlText.Replace("\r", "").Split('\n');
+        float scrollY = sim.Time * 5.0f; 
+        float startY = _term.Height; 
+        
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string line = lines[i];
+            float worldY = startY + (i * 2) - scrollY; 
+            
+            if (worldY > _term.Height || worldY < 0) continue;
+            
+            int screenY = (int)worldY;
+            int centerX = _term.Width / 2;
+            int len = line.Length;
+            int drawX = centerX - (len / 2);
+            _term.DrawString(drawX, screenY, line, Palette.Yellow);
+        }
+    }
+
+    private void DrawSubtitle(string text)
+    {
+        int cx = _term.Width / 2;
+        int y = _term.Height - 3;
+        int len = text.Length;
+        int x = cx - (len / 2);
+        
+        // Draw black bar behind
+        for(int i=-2; i<len+2; i++) _term.Draw(x+i, y, ' ', "\u001b[40m"); 
+        
+        _term.DrawString(x, y, text, Palette.Cyan);
     }
 
     private void RenderScene(DuelSimulation sim)
@@ -239,6 +290,120 @@ public class SceneRenderer
             int sx = (int)(s.Pos.X * _scaleX) + shakeX;
             int sy = (int)(s.Pos.Y * _scaleY) + shakeY;
             _term.Draw(sx, sy, '*', Palette.Yellow);
+        }
+
+        // Smoke
+        foreach (var s in sim.Smoke)
+        {
+             int sx = (int)(s.Pos.X * _scaleX) + shakeX;
+             int sy = (int)(s.Pos.Y * _scaleY) + shakeY;
+             char c = s.Life > 1.0f ? '▒' : '░';
+             _term.Draw(sx, sy, c, Palette.Dim);
+        }
+
+        // Apply Darkness (Blackout Mode) using local shake context
+        if (sim.IsDarkness)
+        {
+            var lights = new List<(int x, int y, int r)>();
+            
+            // Jedi Saber
+            if (sim.Jedi.SaberActive && jediTip.HasValue) 
+            {
+                lights.Add((jediTip.Value.x, jediTip.Value.y, 10));
+                // Add actor center
+                int ax = (int)(sim.Jedi.FX * _scaleX) + shakeX;
+                int ay = (int)(sim.Jedi.FY * _scaleY) + shakeY;
+                lights.Add((ax, ay, 5));
+            }
+            
+            // Sith Saber
+            if (sim.Sith.SaberActive && sithTip.HasValue) 
+            {
+                lights.Add((sithTip.Value.x, sithTip.Value.y, 10));
+                int ax = (int)(sim.Sith.FX * _scaleX) + shakeX;
+                int ay = (int)(sim.Sith.FY * _scaleY) + shakeY;
+                lights.Add((ax, ay, 5));
+            }
+            
+            // Sparks
+            foreach (var s in sim.Sparks)
+            {
+                 int sx = (int)(s.Pos.X * _scaleX) + shakeX;
+                 int sy = (int)(s.Pos.Y * _scaleY) + shakeY;
+                 lights.Add((sx, sy, 4));
+            }
+            
+            // Lightning
+             foreach (var bolt in sim.LightningBolts)
+            {
+                if (bolt.Points.Count > 0)
+                {
+                    // Light up along the bolt? Just use center for now to save perf
+                    var p = bolt.Points[bolt.Points.Count / 2];
+                    int bx = (int)(p.X * _scaleX) + shakeX;
+                    int by = (int)(p.Y * _scaleY) + shakeY;
+                    lights.Add((bx, by, 8));
+                }
+            }
+            
+            _term.ApplyDarkness(lights);
+        }
+
+        // Smoke
+        foreach (var s in sim.Smoke)
+        {
+             int sx = (int)(s.Pos.X * _scaleX) + shakeX;
+             int sy = (int)(s.Pos.Y * _scaleY) + shakeY;
+             char c = s.Life > 1.0f ? '▒' : '░';
+             _term.Draw(sx, sy, c, Palette.Dim);
+        }
+
+        // Apply Darkness (Blackout Mode) using local shake context
+        if (sim.IsDarkness)
+        {
+            var lights = new List<(int x, int y, int r)>();
+            
+            // Jedi Saber
+            if (sim.Jedi.SaberActive && jediTip.HasValue) 
+            {
+                lights.Add((jediTip.Value.x, jediTip.Value.y, 10));
+                // Add actor center
+                int ax = (int)(sim.Jedi.FX * _scaleX) + shakeX;
+                int ay = (int)(sim.Jedi.FY * _scaleY) + shakeY;
+                lights.Add((ax, ay, 5));
+            }
+            
+            // Sith Saber
+            if (sim.Sith.SaberActive && sithTip.HasValue) 
+            {
+                lights.Add((sithTip.Value.x, sithTip.Value.y, 10));
+                int ax = (int)(sim.Sith.FX * _scaleX) + shakeX;
+                int ay = (int)(sim.Sith.FY * _scaleY) + shakeY;
+                lights.Add((ax, ay, 5));
+            }
+            
+            // Sparks
+            foreach (var s in sim.Sparks)
+            {
+                 int sx = (int)(s.Pos.X * _scaleX) + shakeX;
+                 int sy = (int)(s.Pos.Y * _scaleY) + shakeY;
+                 lights.Add((sx, sy, 4));
+            }
+            
+            // Lightning
+             foreach (var bolt in sim.LightningBolts)
+            {
+                if (bolt.Points.Count > 0)
+                {
+                    // Light up along the bolt? Just use center for now to save perf
+                    var p = bolt.Points[bolt.Points.Count / 2];
+                    int bx = (int)(p.X * _scaleX) + shakeX;
+                    int by = (int)(p.Y * _scaleY) + shakeY;
+                    lights.Add((bx, by, 8));
+                }
+            }
+            
+            _term.ApplyDarkness(lights);
         }
     }
 
