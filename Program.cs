@@ -1,92 +1,84 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 using System.Threading;
-using System.Collections.Generic;
 
 namespace StarWarsAnimation;
 
+// --- Core Data Structures ---
+
+struct Vec2
+{
+    public float X, Y;
+    public Vec2(float x, float y) { X = x; Y = y; }
+}
+
+struct Spark
+{
+    public Vec2 Pos;
+    public Vec2 Vel;
+    public float Life;
+}
+
+class Actor
+{
+    public int X, Y;
+    public string Color = "";
+    public bool SaberActive;
+    public int SaberLength;
+    public int PoseIndex;
+    public bool FacingRight;
+}
+
+// --- Main Program ---
+
 class Program
 {
-    // Screen dimensions
-    const int Width = 80;
-    const int Height = 25; // Standard terminal height
+    // Configuration
     const int TargetFps = 20;
-    const int FrameTimeMs = 1000 / TargetFps;
+    const float FrameTime = 1.0f / TargetFps;
 
-    // Colors (ANSI)
-    const string ColorReset = "\u001b[0m";
-    const string ColorBlack = "\u001b[30m";
-    const string ColorRed = "\u001b[91m";   // Bright Red for Sith
-    const string ColorBlue = "\u001b[94m";  // Bright Blue for Jedi
-    const string ColorWhite = "\u001b[97m"; // Bright White for Core/Flash
-    const string ColorYellow = "\u001b[93m"; // Sparks
-    const string ColorDarkGray = "\u001b[90m"; // Background stars
-    const string BgBlack = "\u001b[40m";
+    // Palette
+    const string ClrReset = "\u001b[0m";
+    const string ClrRed = "\u001b[91m";
+    const string ClrBlue = "\u001b[94m";
+    const string ClrWhite = "\u001b[97m";
+    const string ClrYellow = "\u001b[93m";
+    const string ClrDim = "\u001b[90m";
 
-    // Characters
-    struct Pixel
-    {
-        public char Char;
-        public string Color;
-    }
-
-    static Pixel[,] _buffer = new Pixel[Height, Width];
-    static Pixel[,] _prevBuffer = new Pixel[Height, Width];
-    static List<(int x, int y)> _stars = new();
-    static Random _rng = new Random(123); // Deterministic seed
-
-    // Animation State
-    enum Phase { Establishment, FirstExchange, Escalation, Climax, Resolution, FadeOut, Exit }
-    static Phase _currentPhase = Phase.Establishment;
-    static float _time = 0f;
-
-    // Actors
-    class Actor
-    {
-        public int X, Y;
-        public string Color;
-        public bool SaberActive;
-        public int SaberLength; // 0 to 3
-        public int PoseIndex;
-        public bool FacingRight;
-    }
-
-    static Actor _jedi = new Actor { X = 20, Y = 15, Color = ColorBlue, FacingRight = true };
-    static Actor _sith = new Actor { X = 60, Y = 15, Color = ColorRed, FacingRight = false };
-
-    // Effects
-    struct Spark { public float X, Y; public float VX, VY; public float Life; }
+    // Global State
+    static TerminalRenderer _renderer = new();
+    static Random _rng = new(123);
+    static List<Vec2> _stars = new();
     static List<Spark> _sparks = new();
+    static Actor _jedi = new();
+    static Actor _sith = new();
+    
+    // Timeline
+    enum Phase { Establishment, FirstExchange, Escalation, ForceSequence, SaberActionSequence, Climax, Resolution, FadeOut, Exit }
+    static Phase _phase = Phase.Establishment;
+    static float _time = 0f;
     static bool _flashScreen = false;
 
     static void Main(string[] args)
     {
-        Console.OutputEncoding = Encoding.UTF8;
-        Console.CursorVisible = false;
         Console.Title = "Duel of the CLI";
+        InitializeScene();
 
-        // Initialize Stars
-        for (int i = 0; i < 40; i++)
-        {
-            _stars.Add((_rng.Next(Width), _rng.Next(Height)));
-        }
-
-        Stopwatch sw = Stopwatch.StartNew();
-        long previousTime = sw.ElapsedMilliseconds;
+        var stopwatch = Stopwatch.StartNew();
+        var prevTime = stopwatch.Elapsed.TotalSeconds;
 
         try
         {
-            while (_currentPhase != Phase.Exit)
+            while (_phase != Phase.Exit)
             {
-                long currentTime = sw.ElapsedMilliseconds;
-                long deltaTimeMs = currentTime - previousTime;
+                var now = stopwatch.Elapsed.TotalSeconds;
+                var dt = (float)(now - prevTime);
 
-                if (deltaTimeMs >= FrameTimeMs)
+                if (dt >= FrameTime)
                 {
-                    float dt = deltaTimeMs / 1000.0f;
-                    previousTime = currentTime;
-
+                    prevTime = now;
                     Update(dt);
                     Render();
                 }
@@ -104,98 +96,288 @@ class Program
         }
     }
 
+    static void InitializeScene()
+    {
+        // Stars
+        for (int i = 0; i < 40; i++)
+            _stars.Add(new Vec2(_rng.Next(TerminalRenderer.Width), _rng.Next(TerminalRenderer.Height)));
+
+        // Actors
+        _jedi = new Actor { X = 20, Y = 15, Color = ClrBlue, FacingRight = true };
+        _sith = new Actor { X = 60, Y = 15, Color = ClrRed, FacingRight = false };
+    }
+
+    // --- Update Logic ---
+
     static void Update(float dt)
     {
         _time += dt;
 
-        // Choreography Timeline
-        // 0-4s: Establishment
-        // 4-8s: First Exchange
-        // 8-13s: Escalation
-        // 13-17s: Climax
-        // 17-20s: Resolution
-        
-        switch (_currentPhase)
+        switch (_phase)
         {
-            case Phase.Establishment:
-                if (_time < 1.0f) { /* Wait */ }
-                else if (_time < 1.5f) { _jedi.SaberActive = true; _jedi.SaberLength = 3; } // Ignite
-                else if (_time < 2.0f) { _sith.SaberActive = true; _sith.SaberLength = 3; } // Ignite
-                
-                if (_time > 4.0f) _currentPhase = Phase.FirstExchange;
-                break;
-
-            case Phase.FirstExchange:
-                // Move closer
-                if (_time > 4.5f && _time < 5.0f) { _jedi.X = 25; _sith.X = 55; }
-                if (_time > 5.5f && _time < 6.0f) { _jedi.X = 30; _sith.X = 50; }
-                
-                // First Clash
-                if (_time > 6.0f && _time < 6.2f) { _jedi.PoseIndex = 1; _sith.PoseIndex = 1; SpawnSparks(40, 12, 3); }
-                else if (_time > 6.2f) { _jedi.PoseIndex = 0; _sith.PoseIndex = 0; } // Reset
-
-                if (_time > 8.0f) _currentPhase = Phase.Escalation;
-                break;
-
-            case Phase.Escalation:
-                // Faster beats
-                float localTime = _time - 8.0f;
-                // Beat 1
-                if (localTime > 0.5f && localTime < 0.7f) { _jedi.X = 32; _sith.X = 48; _jedi.PoseIndex = 2; _sith.PoseIndex = 2; }
-                else if (localTime > 0.7f && localTime < 1.0f) { SpawnSparks(40, 13, 1); } // Clash
-                
-                // Beat 2
-                if (localTime > 1.5f && localTime < 1.7f) { _jedi.X = 28; _sith.X = 52; _jedi.PoseIndex = 1; _sith.PoseIndex = 0; }
-                
-                // Beat 3 (Big move)
-                if (localTime > 2.5f && localTime < 2.7f) { _jedi.X = 38; _sith.X = 42; _jedi.PoseIndex = 2; _sith.PoseIndex = 2; SpawnSparks(40, 10, 5); }
-                else if (localTime > 2.7f) { _jedi.X = 35; _sith.X = 45; _jedi.PoseIndex = 0; _sith.PoseIndex = 0; }
-
-                if (_time > 13.0f) _currentPhase = Phase.Climax;
-                break;
-
-            case Phase.Climax:
-                // Lock sabers
-                _jedi.X = 38; _sith.X = 42;
-                _jedi.PoseIndex = 3; _sith.PoseIndex = 3;
-                
-                // Flash at impact
-                if (_time > 13.0f && _time < 13.1f) { _flashScreen = true; }
-                else { _flashScreen = false; }
-
-                // Intense sparks during lock
-                if (_time > 13.1f && _time < 15.0f)
-                {
-                    if (_rng.NextDouble() > 0.5) SpawnSparks(40, 11, 2);
-                }
-
-                if (_time > 16.0f) _currentPhase = Phase.Resolution;
-                break;
-
-            case Phase.Resolution:
-                _flashScreen = false;
-                _jedi.PoseIndex = 0; // Stand tall
-                _sith.PoseIndex = 4; // Kneel/Fall
-                _sith.SaberActive = false; // Drop saber
-
-                if (_time > 19.0f) _currentPhase = Phase.FadeOut;
-                break;
-
-            case Phase.FadeOut:
-                // Fade logic handled in render by darkening everything or just exit
-                if (_time > 20.0f) _currentPhase = Phase.Exit;
-                break;
+            case Phase.Establishment:       UpdateEstablishment(); break;
+            case Phase.FirstExchange:       UpdateFirstExchange(); break;
+            case Phase.Escalation:          UpdateEscalation(); break;
+            case Phase.ForceSequence:       UpdateForceSequence(); break;
+            case Phase.SaberActionSequence: UpdateSaberActionSequence(); break;
+            case Phase.Climax:              UpdateClimax(); break;
+            case Phase.Resolution:          UpdateResolution(); break;
+            case Phase.FadeOut:             UpdateFadeOut(); break;
         }
 
-        // Update Sparks
+        UpdateSparks(dt);
+    }
+
+    static void UpdateEstablishment()
+    {
+        if (_time < 1.0f) return;
+        
+        if (_time < 1.5f) { SetSaber(_jedi, true, 3); _jedi.PoseIndex = 0; }
+        else if (_time < 2.0f) { SetSaber(_sith, true, 3); _sith.PoseIndex = 0; }
+        
+        if (_time > 4.0f) _phase = Phase.FirstExchange;
+    }
+
+    static void UpdateFirstExchange()
+    {
+        // Approach
+        if (InRange(4.5f, 5.0f)) { _jedi.X = 25; _sith.X = 55; }
+        if (InRange(5.5f, 6.0f)) { _jedi.X = 30; _sith.X = 50; }
+
+        // Exchange
+        if (InRange(5.8f, 6.0f)) { SetPoses(5, 2); } // Anticipate
+        else if (InRange(6.0f, 6.2f)) // Clash
+        { 
+            SetPoses(1, 1); 
+            SpawnSparks(40, 12, 3); 
+        } 
+        else if (_time >= 6.2f) { SetPoses(0, 0); } // Recover
+
+        if (_time > 8.0f) _phase = Phase.Escalation;
+    }
+
+    static void UpdateEscalation()
+    {
+        float t = _time - 8.0f; // Local phase time
+
+        // Beat 1: Fast Clash
+        if (t > 0.3f && t < 0.5f) { SetPoses(5, 5); }
+        else if (t >= 0.5f && t < 0.7f) 
+        { 
+            _jedi.X = 32; _sith.X = 48; 
+            SetPoses(1, 1); 
+        }
+        else if (t >= 0.7f && t < 1.0f) { SpawnSparks(40, 13, 1); }
+
+        // Beat 2: Riposte
+        if (t > 1.3f && t < 1.5f) { SetPoses(2, 5); }
+        else if (t >= 1.5f && t < 1.7f) 
+        { 
+            _jedi.X = 28; _sith.X = 52; 
+            SetPoses(2, 1); 
+        }
+
+        // Beat 3: Heavy Clash
+        if (t > 2.3f && t < 2.5f) { SetPoses(5, 5); }
+        else if (t >= 2.5f && t < 2.7f) 
+        { 
+            _jedi.X = 38; _sith.X = 42; 
+            SetPoses(1, 1); 
+            SpawnSparks(40, 10, 5); 
+        }
+        else if (t >= 2.7f) 
+        { 
+            _jedi.X = 35; _sith.X = 45; 
+            SetPoses(0, 0); 
+        }
+
+        if (_time > 13.0f) _phase = Phase.ForceSequence;
+    }
+
+    static void UpdateForceSequence()
+    {
+        float t = _time - 13.0f; // Local time starts at 0
+
+        // 1. Sith Prepare (0.0 - 0.5)
+        if (t < 0.5f) 
+        {
+            SetPoses(0, 6); // Jedi Idle, Sith Force Pose
+        }
+        // 2. Force Push (0.5 - 1.5)
+        else if (t < 1.5f)
+        {
+             SetPoses(7, 6); // Jedi Stagger, Sith Force
+             // Slide Jedi back from 35 to ~10 (25 chars)
+             float progress = (t - 0.5f); // 0 to 1
+             _jedi.X = 35 - (int)(25 * progress);
+        }
+        // 3. Stagger/Pause (1.5 - 2.5)
+        else if (t < 2.5f)
+        {
+            SetPoses(7, 0); // Jedi Stagger, Sith drops arm
+        }
+        // 4. Jump Back (2.5 - 3.5)
+        else if (t < 3.5f)
+        {
+            SetPoses(8, 0); // Jedi Jump, Sith Idle
+            // Parabolic arc for Jump
+            float jumpProgress = (t - 2.5f); // 0 to 1
+            
+            // Move X from ~10 back to 38 (Target for climax)
+            _jedi.X = 10 + (int)(28 * jumpProgress);
+            
+            // Arc Y (Base is 15)
+            // 4 * height * x * (1-x)
+            float height = 8.0f; 
+            _jedi.Y = 15 - (int)(height * 4 * jumpProgress * (1 - jumpProgress));
+        }
+        // 5. Land (3.5 - 4.0)
+        else if (t < 4.0f)
+        {
+            _jedi.Y = 15;
+            SetPoses(5, 5); // Anticipation for Climax
+        }
+        else
+        {
+            _phase = Phase.SaberActionSequence;
+        }
+    }
+
+    static void UpdateSaberActionSequence()
+    {
+        float t = _time - 17.0f; // Start at 17s
+
+        // 1. Jedi Jump Toward Sith (0.0 - 1.0)
+        if (t < 1.0f)
+        {
+            SetPoses(8, 0);
+            float p = t / 1.0f;
+            _jedi.X = 38 + (int)(10 * p); // 38 -> 48
+            _jedi.Y = 15 - (int)(5.0f * 4 * p * (1 - p)); // Hop
+        }
+        // 2. Parry and Dodge (1.0 - 2.0)
+        else if (t < 1.5f) { _jedi.Y = 15; _jedi.X = 48; SetPoses(1, 2); } // Jedi Atk, Sith Guard
+        else if (t < 2.0f) { SetPoses(5, 1); } // Jedi Dodge, Sith Atk
+        
+        // 3. Sith Pushes Jedi (2.0 - 3.0)
+        else if (t < 3.0f)
+        {
+            SetPoses(7, 3); // Jedi Stagger, Sith Lock/Push
+            float p = (t - 2.0f);
+            _jedi.X = 48 - (int)(30 * p); // Push left to ~18
+            _sith.X = 60 - (int)(10 * p); // Sith advances to 50
+        }
+        // 4. Jedi Jump Over Sith (3.0 - 4.5)
+        else if (t < 4.5f)
+        {
+            SetPoses(8, 0);
+            float p = (t - 3.0f) / 1.5f;
+            _jedi.X = 18 + (int)(50 * p); // 18 -> 68 (Right side)
+            _jedi.Y = 15 - (int)(12.0f * 4 * p * (1 - p)); // High jump
+            _jedi.FacingRight = false; // Turn mid air?
+            if (p > 0.5f) _jedi.FacingRight = false;
+        }
+        // 5. Sith Stops Jedi Mid-air (4.5 - 5.5)
+        else if (t < 5.5f)
+        {
+            // Freeze Jedi mid-air
+            _jedi.X = 60; // Suspended above/near Sith
+            _jedi.Y = 8;
+            _sith.FacingRight = true; // Face Jedi
+            SetPoses(9, 6); // Jedi Suspended, Sith Force
+        }
+        // 6. Sith Slashes (5.5 - 6.0)
+        else if (t < 6.0f)
+        {
+            SetPoses(9, 1); // Jedi Suspended, Sith Slash
+            if (t > 5.8f) SpawnSparks(60, 8, 2); // Hit?
+        }
+        // 7. Jedi Rebounds/Attacks (6.0 - 7.0)
+        else if (t < 7.0f)
+        {
+            float p = (t - 6.0f);
+            _jedi.Y = 15; // Landed
+            SetPoses(10, 5); // Jedi Dash, Sith Anticipate
+            _jedi.X = 68 - (int)(20 * p); // Dash Left
+        }
+        // 8. Sith Dodges (7.0 - 7.5)
+        else if (t < 7.5f)
+        {
+             SetPoses(1, 5); // Jedi Atk, Sith Lean back
+        }
+        // 9. Finish / Reset (7.5 - 8.0)
+        else if (t < 8.0f)
+        {
+             _jedi.FacingRight = true;
+             _sith.FacingRight = false;
+             _jedi.X = 38; _sith.X = 42;
+             SetPoses(0, 0);
+        }
+        else
+        {
+            _phase = Phase.Climax;
+        }
+    }
+
+    static void UpdateClimax()
+    {
+        // Now starts at 17 + 8 = 25s
+        
+        _jedi.X = 38; _sith.X = 42;
+        SetPoses(3, 3); // Lock
+
+        // Flash Impact
+        if (_time > 25.0f && _time < 25.1f) { _flashScreen = true; }
+        else { _flashScreen = false; }
+
+        // Lock Sparks
+        if (_time > 25.1f && _time < 28.0f && _rng.NextDouble() > 0.5)
+            SpawnSparks(40, 11, 2);
+
+        if (_time > 29.0f) _phase = Phase.Resolution;
+    }
+
+    static void UpdateResolution()
+    {
+        _flashScreen = false;
+        SetPoses(0, 4); // Jedi Stand, Sith Fall
+        SetSaber(_sith, false, 0);
+
+        if (_time > 32.0f) _phase = Phase.FadeOut;
+    }
+
+    static void UpdateFadeOut()
+    {
+        if (_time > 33.0f) _phase = Phase.Exit;
+    }
+
+    // --- Helpers ---
+
+    static bool InRange(float min, float max) => _time >= min && _time < max;
+    
+    static void SetPoses(int jediPose, int sithPose)
+    {
+        _jedi.PoseIndex = jediPose;
+        _sith.PoseIndex = sithPose;
+    }
+
+    static void SetSaber(Actor a, bool active, int length)
+    {
+        a.SaberActive = active;
+        a.SaberLength = length;
+    }
+
+    static void UpdateSparks(float dt)
+    {
         for (int i = _sparks.Count - 1; i >= 0; i--)
         {
             var s = _sparks[i];
-            s.X += s.VX * dt * 20; // Scale speed
-            s.Y += s.VY * dt * 10; // Gravity/Motion
-            s.VY += 20f * dt; // Gravity
+            s.Pos.X += s.Vel.X * dt * 20;
+            s.Pos.Y += s.Vel.Y * dt * 10;
+            s.Vel.Y += 20f * dt; // Gravity
             s.Life -= dt;
             _sparks[i] = s;
+
             if (s.Life <= 0) _sparks.RemoveAt(i);
         }
     }
@@ -208,196 +390,167 @@ class Program
             float speed = (float)(_rng.NextDouble() * 1.5 + 0.5);
             _sparks.Add(new Spark
             {
-                X = x, Y = y,
-                VX = (float)Math.Cos(angle) * speed,
-                VY = (float)Math.Sin(angle) * speed - 1.0f, // Upward bias
+                Pos = new Vec2(x, y),
+                Vel = new Vec2((float)Math.Cos(angle) * speed, (float)Math.Sin(angle) * speed - 1.0f),
                 Life = (float)(_rng.NextDouble() * 0.3 + 0.1)
             });
         }
     }
 
+    // --- Rendering ---
+
     static void Render()
     {
-        // 1. Clear Buffer
-        ClearBuffer();
-
-        // 2. Draw Background (Stars)
-        if (!_flashScreen)
-        {
-            foreach (var (sx, sy) in _stars)
-            {
-                if (sx >= 0 && sx < Width && sy >= 0 && sy < Height)
-                    DrawChar(sx, sy, '.', ColorDarkGray);
-            }
-        }
-
-        // 3. Draw Characters
-        if (!_flashScreen)
-        {
-            DrawActor(_jedi);
-            DrawActor(_sith);
-        }
-
-        // 4. Draw Effects
-        foreach (var s in _sparks)
-        {
-            if (s.X >= 0 && s.X < Width && s.Y >= 0 && s.Y < Height)
-                DrawChar((int)s.X, (int)s.Y, '*', ColorYellow);
-        }
+        _renderer.Clear();
 
         if (_flashScreen)
         {
-            FillBuffer('█', ColorWhite);
+            _renderer.Fill('█', ClrWhite);
+        }
+        else
+        {
+            RenderScene();
         }
 
-        // 5. Output to Console (Double Buffer optimization)
-        DrawBufferToConsole();
+        _renderer.Present();
+    }
+
+    static void RenderScene()
+    {
+        foreach (var s in _stars)
+            _renderer.Draw((int)s.X, (int)s.Y, '.', ClrDim);
+
+        DrawActor(_jedi);
+        DrawActor(_sith);
+
+        foreach (var s in _sparks)
+            _renderer.Draw((int)s.Pos.X, (int)s.Pos.Y, '*', ClrYellow);
     }
 
     static void DrawActor(Actor actor)
     {
         int x = actor.X;
-        int y = actor.Y; // Feet position
-        string c = ColorReset; // Body color (silhouette is usually standard or dark, but prompt says readable silhouette)
-        // Actually prompt says "identifiable even if rendered in a single color". 
-        // We will use standard color for body, specific color for saber.
+        int y = actor.Y;
+        int dir = actor.FacingRight ? 1 : -1;
         
-        // Simple Body
-        // Head
-        DrawChar(x, y - 4, 'O', ColorWhite); 
-        // Torso
-        DrawChar(x, y - 3, '|', ColorWhite);
-        DrawChar(x, y - 2, '|', ColorWhite);
+        // Pose Definitions (Relative offsets)
+        // [Index] -> (Head, TorsoTop, TorsoBot, LegL, LegR, ArmL, ArmR, Hand, Blade)
+        // This keeps logic separated from data
         
-        // Pose Logic
-        if (actor.PoseIndex == 4) // Kneel/Fall
-        {
-            // Override for fallen state
-             DrawChar(x, y - 2, ' ', ColorReset); // Clear standing torso
-             DrawChar(x, y - 3, ' ', ColorReset);
-             DrawChar(x, y - 4, ' ', ColorReset);
+        // Default (Idle)
+        var head = (dx: 0, dy: -4, c: 'O');
+        var torsoT = (dx: 0, dy: -3, c: '|');
+        var torsoB = (dx: 0, dy: -2, c: '|');
+        var legL = (dx: -1, dy: -1, c: '/');
+        var legR = (dx: 1, dy: -1, c: '\\');
+        var armL = (dx: -1, dy: -3, c: '/');
+        var armR = (dx: 1, dy: -3, c: '\\');
+        var hand = (dx: 1, dy: -3);
+        var blade = (dx: 0, dy: -1, c: '|');
 
-             // Lowered head
-             DrawChar(x + (actor.FacingRight ? 1 : -1), y - 1, 'o', ColorWhite);
-             // Body
-             DrawChar(x, y-1, '_', ColorWhite);
-             return; 
+        switch (actor.PoseIndex)
+        {
+            case 1: // Attack
+                head = (2, -4, 'O'); torsoT = (1, -3, '|');
+                legL = (-2, -1, '/'); legR = (2, -1, '\\');
+                armL = (-1, -3, '\\'); armR = (2, -4, '/');
+                hand = (2, -4); blade = (1, -1, '/');
+                break;
+            case 2: // Guard
+                head = (-1, -4, 'O'); torsoT = (-1, -3, '|');
+                legL = (-2, -1, '/'); legR = (1, -1, '\\');
+                armR = (0, -3, '|');
+                hand = (0, -3); blade = (-1, -1, '\\');
+                break;
+            case 3: // Lock
+                head = (1, -4, 'O'); torsoT = (1, -3, '|');
+                legL = (-2, -1, '/'); legR = (2, -1, '\\');
+                armR = (1, -3, '-');
+                hand = (1, -3); blade = (1, 0, '-');
+                break;
+            case 4: // Kneel
+                head = (1, -2, 'o'); torsoT = (0, -1, '_'); torsoB = (0, 0, ' ');
+                legL = (0, -1, '_'); legR = (2, -1, '_');
+                armL = (0,0,' '); armR = (0,0,' '); // Hide arms
+                break;
+            case 5: // Anticipation
+                head = (-1, -4, 'O'); torsoT = (-1, -3, '|');
+                armR = (-2, -4, '\\');
+                hand = (-2, -4); blade = (-1, -1, '\\');
+                break;
+            case 6: // Force Push (Sith)
+                // ArmL raised forward (Force), ArmR (Saber) down/back
+                head = (0, -4, 'O'); torsoT = (0, -3, '|');
+                armL = (2, -3, '-'); // Force Hand
+                armR = (-1, -2, '\\'); // Saber Hand Low
+                hand = (-1, -2); blade = (1, 1, '\\'); // Pointing down/forward
+                break;
+            case 7: // Stagger (Jedi)
+                head = (-2, -4, 'O'); torsoT = (-1, -3, '\\');
+                legL = (-2, -1, '/'); legR = (1, -1, '/'); // Leaning back
+                armL = (-2, -3, '/'); armR = (0, -3, '\\');
+                hand = (0, -3); blade = (-1, -1, '\\'); // Guarding loosely
+                break;
+            case 8: // Jump (Jedi)
+                head = (1, -4, 'O'); torsoT = (0, -3, '|');
+                legL = (-1, -2, '-'); legR = (1, -2, '-'); // Tucked legs
+                armL = (-1, -3, '/'); armR = (1, -3, '\\');
+                hand = (1, -3); blade = (-1, -1, '/');
+                break;
+            case 9: // Suspended (Jedi)
+                head = (0, -4, 'O'); torsoT = (0, -3, '|');
+                legL = (-1, -1, '|'); legR = (1, -1, '|'); // Dangling
+                armL = (-2, -3, '\\'); armR = (2, -3, '/'); // Flailing
+                hand = (2, -3); blade = (0, -1, '|');
+                break;
+            case 10: // Dash/Rebound (Jedi)
+                head = (3, -3, 'O'); torsoT = (2, -2, '-'); torsoB = (0, -2, '-'); // Horizontal
+                legL = (-2, -2, '='); legR = (-1, -2, '='); // Flying
+                armL = (0, -2, '-'); armR = (3, -2, '-'); // Thrusting
+                hand = (3, -2); blade = (1, 0, '-');
+                break;
         }
 
-        // Arms
-        if (actor.PoseIndex == 0) // Idle
+        if (actor.PoseIndex == 4) // Kneel special draw
         {
-            DrawChar(x - 1, y - 3, '/', ColorWhite);
-            DrawChar(x + 1, y - 3, '\\', ColorWhite);
-        }
-        else if (actor.PoseIndex == 1) // Attack High
-        {
-            if (actor.FacingRight) DrawChar(x + 1, y - 3, '/', ColorWhite);
-            else DrawChar(x - 1, y - 3, '\\', ColorWhite);
-        }
-        else if (actor.PoseIndex == 2) // Parry/Guard
-        {
-            if (actor.FacingRight) DrawChar(x + 1, y - 3, '-', ColorWhite);
-            else DrawChar(x - 1, y - 3, '-', ColorWhite);
-        }
-        else if (actor.PoseIndex == 3) // Lock
-        {
-             if (actor.FacingRight) DrawChar(x + 1, y - 3, '>', ColorWhite);
-             else DrawChar(x - 1, y - 3, '<', ColorWhite);
+             _renderer.Draw(x + (head.dx * dir), y + head.dy, head.c, ClrWhite);
+             _renderer.Draw(x, y - 1, '_', ClrWhite);
+             return;
         }
 
-        // Legs
-        DrawChar(x - 1, y - 1, '/', ColorWhite);
-        DrawChar(x + 1, y - 1, '\\', ColorWhite);
+        // Draw Body
+        DrawPart(x, y, dir, legL);
+        DrawPart(x, y, dir, legR);
+        DrawPart(x, y, dir, torsoB);
+        DrawPart(x, y, dir, torsoT);
+        DrawPart(x, y, dir, armL);
+        if (actor.PoseIndex != 3) DrawPart(x, y, dir, armR);
 
+        _renderer.Draw(x + (head.dx * dir), y + head.dy, head.c, ClrWhite);
 
-        // Saber
+        // Draw Saber
         if (actor.SaberActive)
         {
-            int sx = x + (actor.FacingRight ? 2 : -2);
-            int sy = y - 3; // Hand height
-
-            // Draw Handle
-            // DrawChar(sx - (actor.FacingRight ? 1 : -1), sy, '-', ColorWhite);
-
-            // Blade direction based on pose
-            int dx = 0, dy = 0;
-            char bladeChar = '|';
-
-            if (actor.PoseIndex == 0) { dx = 0; dy = -1; bladeChar = '|'; } // Up
-            if (actor.PoseIndex == 1) { dx = (actor.FacingRight ? 1 : -1); dy = -1; bladeChar = '/'; if(!actor.FacingRight) bladeChar = '\\'; } // Diagonal Strike
-            if (actor.PoseIndex == 2) { dx = (actor.FacingRight ? 1 : -1); dy = -1; bladeChar = '/'; if(!actor.FacingRight) bladeChar = '\\'; } 
-            if (actor.PoseIndex == 3) { dx = (actor.FacingRight ? 1 : -1); dy = 0; bladeChar = '-'; } // Horizontal Lock
+            int sx = x + (hand.dx * dir);
+            int sy = y + hand.dy;
+            
+            // Flip blade char
+            char bChar = blade.c;
+            if (dir == -1)
+            {
+                if (bChar == '/') bChar = '\\';
+                else if (bChar == '\\') bChar = '/';
+            }
 
             for (int k = 1; k <= actor.SaberLength; k++)
             {
-                DrawChar(sx + (dx * k), sy + (dy * k), bladeChar, actor.Color);
+                _renderer.Draw(sx + (blade.dx * dir * k), sy + (blade.dy * k), bChar, actor.Color);
             }
         }
     }
 
-    static void ClearBuffer()
+    static void DrawPart(int cx, int cy, int dir, (int dx, int dy, char c) part)
     {
-        for (int y = 0; y < Height; y++)
-            for (int x = 0; x < Width; x++)
-            {
-                _buffer[y, x].Char = ' ';
-                _buffer[y, x].Color = ColorBlack;
-            }
-    }
-
-    static void FillBuffer(char c, string color)
-    {
-        for (int y = 0; y < Height; y++)
-            for (int x = 0; x < Width; x++)
-            {
-                _buffer[y, x].Char = c;
-                _buffer[y, x].Color = color;
-            }
-    }
-
-    static void DrawChar(int x, int y, char c, string color)
-    {
-        if (x >= 0 && x < Width && y >= 0 && y < Height)
-        {
-            _buffer[y, x].Char = c;
-            _buffer[y, x].Color = color;
-        }
-    }
-
-    static void DrawBufferToConsole()
-    {
-        StringBuilder sb = new StringBuilder();
-        // Reset cursor to top-left
-        sb.Append("\u001b[H"); 
-
-        string lastColor = "";
-
-        for (int y = 0; y < Height; y++)
-        {
-            for (int x = 0; x < Width; x++)
-            {
-                var p = _buffer[y, x];
-                var prev = _prevBuffer[y, x];
-
-                // Optimization: In a real terminal, we could skip overwriting if identical.
-                // But for simplicity and to prevent tearing/color bleed issues with ANSI, 
-                // we'll just redraw the whole buffer line by line or character by character.
-                // However, building a huge string is faster than Console.Write per char.
-                
-                if (p.Color != lastColor)
-                {
-                    sb.Append(p.Color);
-                    lastColor = p.Color;
-                }
-                sb.Append(p.Char);
-
-                // Update prev buffer
-                _prevBuffer[y, x] = p;
-            }
-            sb.Append("\n");
-        }
-        sb.Append(ColorReset); // Reset at end of frame
-        Console.Write(sb.ToString());
+        _renderer.Draw(cx + (part.dx * dir), cy + part.dy, part.c, ClrWhite);
     }
 }
