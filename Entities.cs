@@ -33,3 +33,11 @@ public class LightningBolt
     public System.Collections.Generic.List<Vec2> Points { get; set; } = new();
     public float Life { get; set; }
 }
+
+public struct DebrisChunk
+{
+    public Vec2 Pos;
+    public Vec2 Vel;
+    public bool Active;
+    public char Char; // Visual representation
+}

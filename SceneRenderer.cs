@@ -165,12 +165,20 @@ public class SceneRenderer
         }
 
         // Permanent Debris (Scorch marks)
-        foreach (var d in sim.Debris)
+        foreach (var d in sim.ScorchMarks)
         {
-            // Simple transform without zoom for now to match BG
             int dx = (int)(d.X * _scaleX) + shakeX;
-            int dy = (int)(d.Y * _scaleY) + shakeY; // Floor Y
-            _term.Draw(dx, dy, '░', Palette.Dim); // Burn mark
+            int dy = (int)(d.Y * _scaleY) + shakeY; 
+            _term.Draw(dx, dy, '░', Palette.Dim); 
+        }
+
+        // Flying Debris Chunks
+        foreach (var chunk in sim.DebrisChunks)
+        {
+            if (!chunk.Active) continue;
+            int cx = (int)(chunk.Pos.X * _scaleX) + shakeX;
+            int cy = (int)(chunk.Pos.Y * _scaleY) + shakeY;
+            _term.Draw(cx, cy, chunk.Char, Palette.White);
         }
 
         // Helper to draw actors with zoom (simulated by just positioning? No, scale matters)

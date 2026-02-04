@@ -20,13 +20,14 @@ public class DuelSimulation
     public Vec2 CameraFocus { get; private set; } = new Vec2(40, 12);
     public bool IsFinished => _phase == Phase.Exit;
     
-    public List<Vec2> Debris { get; private set; } = new(); // Scars/Damage
+    public List<Vec2> ScorchMarks { get; private set; } = new(); // Scars/Damage
+    public List<DebrisChunk> DebrisChunks { get; private set; } = new();
 
     private float _time;
     private Random _rng = new(123);
     private Phase _phase = Phase.Establishment;
 
-    private enum Phase { Establishment, FirstExchange, Escalation, ForceSequence, SaberActionSequence, Climax, Resolution, FadeOut, Exit }
+    private enum Phase { Establishment, FirstExchange, Escalation, WallDestruction, ForceSequence, SaberActionSequence, Climax, Resolution, FadeOut, Exit }
 
     public void Initialize()
     {
@@ -49,6 +50,7 @@ public class DuelSimulation
             case Phase.Establishment: UpdateEstablishment(); break;
             case Phase.FirstExchange: UpdateFirstExchange(); break;
             case Phase.Escalation: UpdateEscalation(); break;
+            case Phase.WallDestruction: UpdateWallDestruction(); break;
             case Phase.ForceSequence: UpdateForceSequence(); break;
             case Phase.SaberActionSequence: UpdateSaberActionSequence(); break;
             case Phase.Climax: UpdateClimax(); break;
@@ -57,6 +59,7 @@ public class DuelSimulation
         }
 
         SimulateCape(Sith, dt);
+        UpdateDebris(dt);
         UpdateSparks(dt);
         UpdateLightning(dt);
     }
@@ -109,7 +112,7 @@ public class DuelSimulation
         { 
             SetPoses(1, 1); 
             SpawnSparks(40, 12, 3); 
-            ShakeScreen = true;
+          ShakeScreen = true;
             ZoomLevel = 1.4f; // Zoom in on impact
         } 
         else if (_time >= 6.2f) { SetPoses(0, 0); ShakeScreen = false; ZoomLevel = 1.0f; }
@@ -152,9 +155,9 @@ public class DuelSimulation
             ZoomLevel = 1.5f; 
             
             // Permanent Scorch Mark on Floor
-            if (t > 2.5f && t < 2.55f) Debris.Add(new Vec2(40, 16));
+            if (t > 2.5f && t < 2.55f) ScorchMarks.Add(new Vec2(40, 16));
         }
-        else if (t >= 2.7f && t < 3.2f) 
+        else if (t >= 2.7f && t < 3.2f)
         { 
             SetPoses(3, 3); // Brief Lock
             Jedi.FX = 36; Sith.FX = 44; 
@@ -244,12 +247,113 @@ public class DuelSimulation
 
         CameraFocus = new Vec2((Jedi.FX + Sith.FX)/2, 12);
 
-        if (_time > 17.0f) _phase = Phase.ForceSequence;
+        if (_time > 17.0f) _phase = Phase.WallDestruction;
+    }
+
+    private void UpdateWallDestruction()
+    {
+        float t = _time - 17.0f;
+        
+        // 0.0 - 1.0: Preparation
+        if (t < 1.0f)
+        {
+            SetPoses(2, 6); // Jedi Guards, Sith Pulls
+            Sith.FacingRight = false; // Face left towards Jedi
+            Jedi.FacingRight = true;
+            
+            // Wall Cracking Effect
+            if (_rng.NextDouble() > 0.7) SpawnSparks(78, (int)(5 + _rng.NextDouble() * 10), 1);
+            if (t > 0.5f) ShakeScreen = true;
+        }
+        // 1.0 - 5.0: The Barrage
+        else if (t < 5.0f)
+        {
+            ShakeScreen = false;
+            
+            // Spawn Debris
+            if (_rng.NextDouble() > 0.80) // Slightly more frequent
+            {
+                // Fix spawn height to be strictly above floor (Floor is ~15)
+                float spawnY = (float)(2 + _rng.NextDouble() * 10); // 2 to 12
+                char[] debrisChars = { '▞', '▟', '▙', '▀', '▄', '■', '●' };
+                
+                // Calculate velocity to hit Jedi
+                float targetX = Jedi.FX;
+                float targetY = Jedi.FY - 2; // Aim for chest
+                float timeToHit = 1.0f + (float)_rng.NextDouble() * 0.5f; // Randomize speed slightly
+                
+                float vx = (targetX - 78) / timeToHit;
+                // vy = (dy - 0.5*g*t^2) / t
+                float vy = ((targetY - spawnY) - (0.5f * 10f * timeToHit * timeToHit)) / timeToHit;
+
+                DebrisChunks.Add(new DebrisChunk 
+                { 
+                    Pos = new Vec2(78, spawnY),
+                    Vel = new Vec2(vx, vy),
+                    Active = true,
+                    Char = debrisChars[_rng.Next(debrisChars.Length)]
+                });
+                
+                // Explosion at wall source
+                SpawnSparks(78, (int)spawnY, 3); 
+            }
+
+            // Jedi Defense Logic
+            // Find closest debris
+            float closestDist = 999f;
+            Vec2 target = new Vec2(0,0);
+            foreach (var d in DebrisChunks)
+            {
+                if (!d.Active) continue;
+                float dist = d.Pos.X - Jedi.FX;
+                // Look ahead for debris coming towards us
+                if (dist > -2.0f && dist < closestDist)
+                {
+                    closestDist = dist;
+                    target = d.Pos;
+                }
+            }
+
+            // Expanded reaction range
+            if (closestDist < 12.0f) // Incoming!
+            {
+                if (closestDist < 6.0f) 
+                {
+                    // Swing!
+                    SetPoses(1, 6); // Attack
+                    
+                    // Visual flair: different attack poses based on height
+                    if (target.Y < Jedi.FY - 3) Jedi.PoseIndex = 1; // High Swing
+                    else Jedi.PoseIndex = 11; // Low/Mid Swing
+                    
+                    // Hold the pose slightly longer visually? 
+                    // No, frame rate is high enough.
+                }
+                else
+                {
+                    SetPoses(5, 6); // Anticipate (Wind up)
+                }
+            }
+            else
+            {
+                SetPoses(2, 6); // Guard
+            }
+        }
+        // 5.0 - 6.0: Cooldown
+        else if (t < 6.0f)
+        {
+            ShakeScreen = false;
+            SetPoses(0, 0);
+        }
+        else
+        {
+            _phase = Phase.ForceSequence;
+        }
     }
 
     private void UpdateForceSequence()
     {
-        float t = _time - 17.0f;
+        float t = _time - 23.0f; // Adjusted for WallDestruction (+6s)
 
         if (t < 0.5f) SetPoses(0, 6); // Sith prepares
         else if (t < 2.5f) // Lightning Phase (2 seconds)
@@ -316,7 +420,7 @@ public class DuelSimulation
 
     private void UpdateSaberActionSequence()
     {
-        float t = _time - 22.0f; // Adjusted for 17s start + 5s Force = 22s
+        float t = _time - 28.0f; // Adjusted: 17 + 6 (Wall) + 5 (Force) = 28s
 
         if (t < 0.2f) { SetPoses(11, 0); }
         else if (t < 1.0f)
@@ -378,7 +482,7 @@ public class DuelSimulation
         Jedi.FX = 38; Sith.FX = 42;
         SetPoses(3, 3);
 
-        if (_time > 30.0f && _time < 30.1f) FlashScreen = true; // Adjusted +5s
+        if (_time > 30.0f && _time < 30.1f) FlashScreen = true; 
         else FlashScreen = false;
 
         if (_time > 30.1f && _time < 33.0f && _rng.NextDouble() > 0.5)
@@ -390,6 +494,9 @@ public class DuelSimulation
     private void UpdateResolution()
     {
         FlashScreen = false;
+        ShakeScreen = false;
+        ZoomLevel = 1.0f;
+        
         SetPoses(0, 4); 
         SetSaber(Sith, false, 0);
         if (_time > 37.0f) _phase = Phase.FadeOut;
@@ -444,6 +551,56 @@ public class DuelSimulation
         // Smooth Damping
         a.CapeTail.X += (targetX - a.CapeTail.X) * 8.0f * dt;
         a.CapeTail.Y += (targetY - a.CapeTail.Y) * 8.0f * dt;
+    }
+
+    private void UpdateDebris(float dt)
+    {
+        for (int i = 0; i < DebrisChunks.Count; i++)
+        {
+            var d = DebrisChunks[i];
+            if (!d.Active) continue;
+
+            d.Pos.X += d.Vel.X * dt;
+            d.Pos.Y += d.Vel.Y * dt;
+            
+            // Gravity on debris
+            d.Vel.Y += 10.0f * dt;
+
+            // Collision with Jedi Saber
+            // Saber Hitbox: Jedi FX/FY.
+            // When Attacking (Pose 1 or 11), blade covers area in front.
+            // Let's be generous with hit detection to ensure "Cool" factor.
+            if (Jedi.PoseIndex == 1 || Jedi.PoseIndex == 11) 
+            {
+                float dx = d.Pos.X - Jedi.FX;
+                float dy = d.Pos.Y - Jedi.FY;
+                
+                // Hitbox: 0 to 6 in front, -5 to +5 height relative to Jedi center
+                if (dx > -1.0f && dx < 7.0f && Math.Abs(dy) < 6.0f)
+                {
+                    d.Active = false;
+                    SpawnSparks((int)d.Pos.X, (int)d.Pos.Y, 8); // MASSIVE sparks
+                    ShakeScreen = true;
+                }
+            }
+
+            // Floor collision
+            if (d.Pos.Y > 15) 
+            {
+                d.Active = false;
+                d.Pos.Y = 16;
+                if (d.Pos.X > 0 && d.Pos.X < LogicWidth) // Only mark if on screen
+                {
+                    ScorchMarks.Add(d.Pos); 
+                    SpawnSparks((int)d.Pos.X, (int)d.Pos.Y, 2);
+                }
+            }
+
+            DebrisChunks[i] = d;
+        }
+
+        // Cleanup
+        if (DebrisChunks.Count > 0 && DebrisChunks[0].Pos.X < -10) DebrisChunks.RemoveAt(0);
     }
 
     private void UpdateSparks(float dt)
