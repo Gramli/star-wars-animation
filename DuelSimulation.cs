@@ -128,7 +128,7 @@ public class DuelSimulation
         if (t > 0.2f && t < 0.5f) { SetPoses(5, 5); }
         else if (t >= 0.5f && t < 0.7f) 
         { 
-            Jedi.FX = 35; Sith.FX = 45; // Close distance (was 32, 48)
+            Jedi.FX = 35; Sith.FX = 45; 
             SetPoses(1, 1); 
         }
         else if (t >= 0.7f && t < 1.0f) { SpawnSparks(40, 13, 1); }
@@ -137,7 +137,7 @@ public class DuelSimulation
         if (t > 1.2f && t < 1.5f) { SetPoses(2, 5); }
         else if (t >= 1.5f && t < 1.7f) 
         { 
-            Jedi.FX = 33; Sith.FX = 47; // Close distance (was 28, 52)
+            Jedi.FX = 33; Sith.FX = 47; 
             SetPoses(2, 1); 
         }
 
@@ -154,22 +154,102 @@ public class DuelSimulation
             // Permanent Scorch Mark on Floor
             if (t > 2.5f && t < 2.55f) Debris.Add(new Vec2(40, 16));
         }
-        else if (t >= 2.7f) 
+        else if (t >= 2.7f && t < 3.2f) 
         { 
+            SetPoses(3, 3); // Brief Lock
             Jedi.FX = 36; Sith.FX = 44; 
-            SetPoses(0, 0);
             ShakeScreen = false;
             ZoomLevel = 1.0f;
         }
 
+        // --- NEW EXTENDED SEQUENCE ---
+
+        // Beat 4: Disengage & Circle (3.2 - 4.2)
+        else if (t >= 3.2f && t < 4.2f)
+        {
+             ShakeScreen = false; ZoomLevel = 1.0f;
+             float p = (t - 3.2f);
+             Jedi.FX = Lerp(36, 28, p);
+             Sith.FX = Lerp(44, 52, p);
+             SetPoses(2, 2); // Guarding
+        }
+
+        // Beat 5: The Flurry (4.2 - 6.0)
+        else if (t >= 4.2f && t < 4.5f) { SetPoses(5, 5); } // Wind up
+        else if (t >= 4.5f && t < 4.7f) // High Hit
+        {
+             Jedi.FX = 38; Sith.FX = 42;
+             SetPoses(1, 2); // Attack/Guard
+             if (t < 4.55f) { SpawnSparks(40, 10, 2); ShakeScreen = true; }
+        }
+        else if (t >= 4.7f && t < 4.9f) // Low Hit
+        {
+             SetPoses(11, 1); // Crouch-Attack / Attack
+             if (t < 4.75f) { SpawnSparks(40, 14, 2); }
+        }
+        else if (t >= 4.9f && t < 5.1f) // Mid Hit
+        {
+             SetPoses(1, 1);
+             if (t < 4.95f) { SpawnSparks(40, 12, 2); ShakeScreen = true; }
+        }
+        else if (t >= 5.1f && t < 5.5f) { SetPoses(2, 2); ShakeScreen = false; } // Reset
+
+        // Beat 6: Jump Dodge (5.5 - 7.0)
+        else if (t >= 5.5f && t < 6.5f)
+        {
+             float jp = (t - 5.5f);
+             // Sith charges
+             Sith.PoseIndex = 10; 
+             Sith.FX = Lerp(42, 30, jp); 
+             
+             // Jedi Jumps over
+             Jedi.PoseIndex = 8;
+             Jedi.FY = 15 - (float)Math.Sin(jp * Math.PI) * 9;
+             Jedi.FX = Lerp(38, 50, jp); // Swap sides temporary
+             
+             // Mid-air intercept
+             if (jp > 0.4f && jp < 0.6f) 
+             { 
+                 if (jp < 0.45f) SpawnSparks(35, 12, 3);
+             }
+        }
+        else if (t >= 6.5f && t < 7.0f) // Land & Face
+        {
+             Jedi.FY = 15; Jedi.FX = 50; Sith.FX = 30;
+             Jedi.FacingRight = false; Sith.FacingRight = true;
+             SetPoses(11, 11);
+        }
+
+        // Beat 7: Reverse Clash (7.0 - 8.0)
+        else if (t >= 7.0f && t < 7.3f) { SetPoses(5, 5); }
+        else if (t >= 7.3f && t < 8.0f)
+        {
+             Jedi.FX = 42; Sith.FX = 38;
+             SetPoses(1, 1);
+             if (t < 7.35f) { SpawnSparks(40, 12, 5); ShakeScreen = true; ZoomLevel = 1.4f; }
+        }
+
+        // Beat 8: Force Push Reset (8.0 - 9.0) - Get back to correct sides
+        else if (t >= 8.0f && t < 9.0f)
+        {
+             ShakeScreen = false; ZoomLevel = 1.0f;
+             float rp = (t - 8.0f);
+             
+             Jedi.FX = Lerp(42, 25, rp);
+             Sith.FX = Lerp(38, 55, rp);
+             
+             if (rp > 0.5f) { Jedi.FacingRight = true; Sith.FacingRight = false; }
+             SetPoses(8, 8); // Jump back
+        }
+
         CameraFocus = new Vec2((Jedi.FX + Sith.FX)/2, 12);
 
-        if (_time > 13.0f) _phase = Phase.ForceSequence;
+        if (_time > 17.0f) _phase = Phase.ForceSequence;
     }
 
     private void UpdateForceSequence()
     {
-        float t = _time - 13.0f; 
+        float t = _time - 17.0f;
 
         if (t < 0.5f) SetPoses(0, 6); // Sith prepares
         else if (t < 2.5f) // Lightning Phase (2 seconds)
@@ -236,7 +316,7 @@ public class DuelSimulation
 
     private void UpdateSaberActionSequence()
     {
-        float t = _time - 17.0f; 
+        float t = _time - 22.0f; // Adjusted for 17s start + 5s Force = 22s
 
         if (t < 0.2f) { SetPoses(11, 0); }
         else if (t < 1.0f)
@@ -298,13 +378,13 @@ public class DuelSimulation
         Jedi.FX = 38; Sith.FX = 42;
         SetPoses(3, 3);
 
-        if (_time > 25.0f && _time < 25.1f) FlashScreen = true;
+        if (_time > 30.0f && _time < 30.1f) FlashScreen = true; // Adjusted +5s
         else FlashScreen = false;
 
-        if (_time > 25.1f && _time < 28.0f && _rng.NextDouble() > 0.5)
+        if (_time > 30.1f && _time < 33.0f && _rng.NextDouble() > 0.5)
             SpawnSparks(40, 11, 2);
 
-        if (_time > 29.0f) _phase = Phase.Resolution;
+        if (_time > 34.0f) _phase = Phase.Resolution;
     }
 
     private void UpdateResolution()
@@ -312,12 +392,12 @@ public class DuelSimulation
         FlashScreen = false;
         SetPoses(0, 4); 
         SetSaber(Sith, false, 0);
-        if (_time > 32.0f) _phase = Phase.FadeOut;
+        if (_time > 37.0f) _phase = Phase.FadeOut;
     }
 
     private void UpdateFadeOut()
     {
-        if (_time > 33.0f) _phase = Phase.Exit;
+        if (_time > 38.0f) _phase = Phase.Exit;
     }
 
     private bool InRange(float min, float max) => _time >= min && _time < max;
@@ -341,20 +421,29 @@ public class DuelSimulation
         float anchorY = a.FY - 3.0f;
         float velX = (a.FX - a.PrevFX) / dt;
         float velY = (a.FY - a.PrevFY) / dt;
-        float targetX = anchorX - (a.FacingRight ? 2.0f : -2.0f);
-        float targetY = anchorY + 3.0f;
+        
+        // Default hanging position (Gravity)
+        float targetX = anchorX - (a.FacingRight ? 1.5f : -1.5f);
+        float targetY = anchorY + 4.0f;
 
-        targetX -= velX * 0.1f;
-        targetY -= velY * 0.1f;
+        // Physics: Drag
+        targetX -= velX * 0.15f; // Drag against movement
+        targetY -= velY * 0.15f; // Drag against jump
 
-        if (a.PoseIndex == 6 || a.PoseIndex == 9 || velY < -5.0f) 
+        // Force Action Reaction (Wind from power)
+        if (a.PoseIndex == 6) // Casting Force
         {
-             targetY -= 2.0f;
-             targetX -= (a.FacingRight ? 3.0f : -3.0f);
+             targetX -= (a.FacingRight ? 4.0f : -4.0f); // Blows back violently
+             targetY -= 2.0f; // Lift
+        }
+        else if (velY < -5.0f) // Jumping up
+        {
+             targetY += 1.0f; // Pull down
         }
 
-        a.CapeTail.X += (targetX - a.CapeTail.X) * 5.0f * dt;
-        a.CapeTail.Y += (targetY - a.CapeTail.Y) * 5.0f * dt;
+        // Smooth Damping
+        a.CapeTail.X += (targetX - a.CapeTail.X) * 8.0f * dt;
+        a.CapeTail.Y += (targetY - a.CapeTail.Y) * 8.0f * dt;
     }
 
     private void UpdateSparks(float dt)

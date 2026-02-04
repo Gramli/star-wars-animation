@@ -414,8 +414,52 @@ public class SceneRenderer
 
     private void DrawCape(Actor a)
     {
-        // ... (existing cape code - reflections for cape too complex for now)
-        // Keeping as is, but maybe skip for reflection to save time/complexity
+        // 1. Anchor point (Shoulders)
+        float startX = a.FX - (a.FacingRight ? 1 : -1);
+        float startY = a.FY - 3; // Shoulders
+        
+        // 2. Control Point (Mid-back / wind influence)
+        // We use Bezier curve for smooth flow
+        float tailX = a.CapeTail.X;
+        float tailY = a.CapeTail.Y;
+
+        float midX = (startX + tailX) / 2;
+        float midY = (startY + tailY) / 2;
+        
+        // Add "sag" or "lift" based on movement
+        midY += 1.0f; 
+
+        // Draw Bezier Curve
+        int steps = 10;
+        for (int i = 0; i <= steps; i++)
+        {
+            float t = (float)i / steps;
+            float invT = 1f - t;
+            
+            // Quadratic Bezier: B(t) = (1-t)^2 * P0 + 2(1-t)t * P1 + t^2 * P2
+            float lx = (invT * invT * startX) + (2 * invT * t * midX) + (t * t * tailX);
+            float ly = (invT * invT * startY) + (2 * invT * t * midY) + (t * t * tailY);
+
+            int cx = (int)(lx * _scaleX);
+            int cy = (int)(ly * _scaleY);
+
+            char c = ' ';
+            // Textured cape - using softer, flowy characters
+            if (t < 0.3) c = '}'; 
+            else if (t < 0.6) c = ')';
+            else c = '›';
+            
+            // Adjust character based on slope for better shape
+            float slope = (ly - startY) / (lx - startX + 0.001f);
+            if (Math.Abs(slope) > 1.5) c = '│'; // Vertical hanging
+            else if (slope > 0.5) c = '╲';
+            else if (slope < -0.5) c = '╱';
+            
+            _term.Draw(cx, cy, c, Palette.Dim);
+            
+            // Draw a second layer for thickness/width (Shadow)
+            _term.Draw(cx, cy+1, ':', Palette.Dim);
+        }
     }
 
     private void DrawPart(int cx, int cy, int dir, (int dx, int dy, char c) part, bool reflect, string color)
