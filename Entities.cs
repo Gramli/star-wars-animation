@@ -27,3 +27,9 @@ public class Actor
     // Cape Simulation
     public Vec2 CapeTail;
 }
+
+public class LightningBolt
+{
+    public System.Collections.Generic.List<Vec2> Points { get; set; } = new();
+    public float Life { get; set; }
+}

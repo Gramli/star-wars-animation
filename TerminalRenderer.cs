@@ -75,6 +75,30 @@ namespace StarWarsAnimation
             }
         }
 
+        public void ApplyLighting(int lx, int ly, int radius, string color)
+        {
+            int r2 = radius * radius;
+            for (int y = ly - radius; y <= ly + radius; y++)
+            {
+                if (y < 0 || y >= Height) continue;
+                for (int x = lx - radius; x <= lx + radius; x++)
+                {
+                    if (x < 0 || x >= Width) continue;
+                    
+                    int dx = x - lx;
+                    int dy = y - ly;
+                    if (dx*dx + dy*dy <= r2)
+                    {
+                        // Only light up background (Dim) or floor/walls
+                        if (_buffer[y, x].Color == Palette.Dim)
+                        {
+                            _buffer[y, x].Color = color;
+                        }
+                    }
+                }
+            }
+        }
+
         public void Present()
         {
             _sb.Clear();

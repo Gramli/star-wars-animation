@@ -10,11 +10,17 @@ public class DuelSimulation
 
     public List<Vec2> Stars { get; private set; } = new();
     public List<Spark> Sparks { get; private set; } = new();
+    public List<LightningBolt> LightningBolts { get; private set; } = new();
     public Actor Jedi { get; private set; }
     public Actor Sith { get; private set; }
 
     public bool FlashScreen { get; private set; }
+    public bool ShakeScreen { get; private set; }
+    public float ZoomLevel { get; private set; } = 1.0f;
+    public Vec2 CameraFocus { get; private set; } = new Vec2(40, 12);
     public bool IsFinished => _phase == Phase.Exit;
+    
+    public List<Vec2> Debris { get; private set; } = new(); // Scars/Damage
 
     private float _time;
     private Random _rng = new(123);
@@ -52,6 +58,16 @@ public class DuelSimulation
 
         SimulateCape(Sith, dt);
         UpdateSparks(dt);
+        UpdateLightning(dt);
+    }
+
+    private void UpdateLightning(float dt)
+    {
+        for (int i = LightningBolts.Count - 1; i >= 0; i--)
+        {
+            LightningBolts[i].Life -= dt;
+            if (LightningBolts[i].Life <= 0) LightningBolts.RemoveAt(i);
+        }
     }
 
     private void SavePrevPos(Actor a) { a.PrevFX = a.FX; a.PrevFY = a.FY; }
@@ -70,25 +86,36 @@ public class DuelSimulation
 
     private void UpdateFirstExchange()
     {
-        // Smooth Approach with small hop/step
-        if (InRange(4.5f, 4.7f)) { Jedi.PoseIndex = 11; Sith.PoseIndex = 11; } // Crouch/Prep
-        else if (InRange(4.7f, 5.0f)) 
+        // Smooth Approach (Walk)
+        if (InRange(4.5f, 5.5f)) 
         { 
-            Jedi.FX = Lerp(20, 32, (5.0f - 4.7f)); // Move closer (was 25)
-            Jedi.FX = 32; Sith.FX = 48; // Set close engagement distance (was 25, 55)
-            Jedi.PoseIndex = 0; Sith.PoseIndex = 0;
+            float t = (_time - 4.5f) / 1.0f;
+            Jedi.FX = Lerp(20, 32, t);
+            Sith.FX = Lerp(60, 48, t);
+            
+            // Walk Animation (Swap legs every 0.15s)
+            int walkFrame = (int)(_time * 6) % 2;
+            Jedi.PoseIndex = 13 + walkFrame; 
+            Sith.PoseIndex = 13 + walkFrame;
         }
-        
-        if (InRange(5.4f, 5.6f)) { Jedi.PoseIndex = 11; Sith.PoseIndex = 11; }
-        else if (InRange(5.6f, 6.0f)) { Jedi.FX = 35; Sith.FX = 45; } // Even closer for clash (was 30, 50)
+        else if (InRange(5.5f, 5.8f)) 
+        { 
+            Jedi.FX = 32; Sith.FX = 48;
+            Jedi.PoseIndex = 0; Sith.PoseIndex = 0; 
+        }
 
-        if (InRange(5.8f, 6.0f)) { SetPoses(5, 2); }
+        if (InRange(5.8f, 6.0f)) { SetPoses(5, 2); ZoomLevel = 1.2f; }
         else if (InRange(6.0f, 6.2f)) 
         { 
             SetPoses(1, 1); 
             SpawnSparks(40, 12, 3); 
+            ShakeScreen = true;
+            ZoomLevel = 1.4f; // Zoom in on impact
         } 
-        else if (_time >= 6.2f) { SetPoses(0, 0); }
+        else if (_time >= 6.2f) { SetPoses(0, 0); ShakeScreen = false; ZoomLevel = 1.0f; }
+
+        // Camera Tracking
+        CameraFocus = new Vec2((Jedi.FX + Sith.FX)/2, 12);
 
         if (_time > 8.0f) _phase = Phase.Escalation;
     }
@@ -115,18 +142,27 @@ public class DuelSimulation
         }
 
         // Beat 3: Heavy Clash
-        if (t > 2.2f && t < 2.5f) { SetPoses(5, 5); }
+        if (t > 2.2f && t < 2.5f) { SetPoses(5, 5); ZoomLevel = 1.3f; }
         else if (t >= 2.5f && t < 2.7f) 
         { 
-            Jedi.FX = 38; Sith.FX = 42; // Very close (kept same, was good)
+            Jedi.FX = 38; Sith.FX = 42; 
             SetPoses(1, 1); 
-            SpawnSparks(40, 10, 5); 
+            SpawnSparks(40, 10, 5);
+            ShakeScreen = true; 
+            ZoomLevel = 1.5f; 
+            
+            // Permanent Scorch Mark on Floor
+            if (t > 2.5f && t < 2.55f) Debris.Add(new Vec2(40, 16));
         }
         else if (t >= 2.7f) 
         { 
             Jedi.FX = 36; Sith.FX = 44; 
-            SetPoses(0, 0); 
+            SetPoses(0, 0);
+            ShakeScreen = false;
+            ZoomLevel = 1.0f;
         }
+
+        CameraFocus = new Vec2((Jedi.FX + Sith.FX)/2, 12);
 
         if (_time > 13.0f) _phase = Phase.ForceSequence;
     }
@@ -135,29 +171,67 @@ public class DuelSimulation
     {
         float t = _time - 13.0f; 
 
-        if (t < 0.5f) SetPoses(0, 6);
-        else if (t < 1.5f)
+        if (t < 0.5f) SetPoses(0, 6); // Sith prepares
+        else if (t < 2.5f) // Lightning Phase (2 seconds)
+        {
+             SetPoses(2, 6); // Jedi Blocks (2), Sith Casts (6)
+             
+             // Generate Lightning
+             if (_rng.NextDouble() > 0.3)
+             {
+                 var bolt = new LightningBolt { Life = 0.1f };
+                 GenerateLightning(bolt, new Vec2(Sith.FX - 2, Sith.FY - 3), new Vec2(Jedi.FX + 1, Jedi.FY - 3));
+                 LightningBolts.Add(bolt);
+             }
+
+             // Jedi slides back slightly
+             float progress = (t - 0.5f); 
+             Jedi.FX = 35 - (5 * progress);
+             
+             // Sparks at impact
+             if (_rng.NextDouble() > 0.5) SpawnSparks((int)Jedi.FX + 2, (int)Jedi.FY - 3, 1);
+        }
+        else if (t < 3.5f) // Big Push / Jump Back
         {
              SetPoses(7, 6);
-             float progress = (t - 0.5f); 
-             Jedi.FX = 35 - (25 * progress);
+             float progress = (t - 2.5f); 
+             Jedi.FX = 25 - (15 * progress); // Fast slide back
         }
-        else if (t < 2.5f) SetPoses(7, 0); 
-        else if (t < 2.7f) SetPoses(11, 0);
-        else if (t < 3.7f)
+        else if (t < 4.5f) // Jump Sequence
         {
             SetPoses(8, 0); 
-            float jumpProgress = (t - 2.7f); 
+            float jumpProgress = (t - 3.5f); 
             Jedi.FX = 10 + (28 * jumpProgress);
             float height = 8.0f; 
             Jedi.FY = 15 - (height * 4 * jumpProgress * (1 - jumpProgress));
         }
-        else if (t < 4.0f)
+        else if (t < 4.8f)
         {
             Jedi.FY = 15;
             SetPoses(11, 5);
         }
         else _phase = Phase.SaberActionSequence;
+    }
+
+    private void GenerateLightning(LightningBolt bolt, Vec2 start, Vec2 end)
+    {
+        bolt.Points.Add(start);
+        Vec2 current = start;
+        Vec2 dir = new Vec2(end.X - start.X, end.Y - start.Y);
+        float dist = (float)Math.Sqrt(dir.X*dir.X + dir.Y*dir.Y);
+        int segments = (int)(dist / 2);
+        
+        for (int i = 1; i < segments; i++)
+        {
+            float t = (float)i / segments;
+            float jitter = (float)(_rng.NextDouble() * 2.0 - 1.0);
+            Vec2 p = new Vec2(
+                start.X + (end.X - start.X) * t,
+                start.Y + (end.Y - start.Y) * t + jitter
+            );
+            bolt.Points.Add(p);
+        }
+        bolt.Points.Add(end);
     }
 
     private void UpdateSaberActionSequence()
