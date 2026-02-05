@@ -4,8 +4,8 @@ namespace StarWarsAnimation;
 
 public class SceneRenderer
 {
-    private const float LogicWidth = 80f;
-    private const float LogicHeight = 25f;
+    private const float LogicWidth = Constants.LogicWidth;
+    private const float LogicHeight = Constants.LogicHeight;
 
     private readonly TerminalRenderer _term;
     private readonly float _scaleX;
@@ -113,8 +113,8 @@ public class SceneRenderer
         
         // Perspective Text
         string[] lines = sim.CrawlText.Replace("\r", "").Split('\n');
-        float scrollY = sim.Time * 5.0f; 
-        float startY = _term.Height; 
+        float scrollY = sim.Time * 2.5f; 
+        float startY = _term.Height;
         
         for (int i = 0; i < lines.Length; i++)
         {
@@ -221,12 +221,30 @@ public class SceneRenderer
             DrawWallDamage(shakeX, shakeY);
         }
 
-        // Permanent Debris (Scorch marks)
+        // Permanent Debris (Scorch marks) with Molten Effect
         foreach (var d in sim.ScorchMarks)
         {
-            int dx = (int)(d.X * _scaleX) + shakeX;
-            int dy = (int)(d.Y * _scaleY) + shakeY; 
-            _term.Draw(dx, dy, '░', Palette.Dim); 
+            int dx = (int)(d.Pos.X * _scaleX) + shakeX;
+            int dy = (int)(d.Pos.Y * _scaleY) + shakeY; 
+            
+            // Molten cooling logic
+            char c = '░';
+            string color = Palette.Dim;
+            
+            if (d.Age < 0.3f) 
+            {
+                c = '▓'; 
+                color = Palette.White; // Hot!
+                _term.ApplyLighting(dx, dy, 4, Palette.Yellow); // Glow
+            }
+            else if (d.Age < 1.5f)
+            {
+                c = '▒';
+                color = Palette.Red; // Cooling
+                _term.ApplyLighting(dx, dy, 2, Palette.Red);
+            }
+            
+            _term.Draw(dx, dy, c, color); 
         }
 
         // Flying Debris Chunks
@@ -257,6 +275,10 @@ public class SceneRenderer
         // Actors
         var jediTip = DrawActor(sim.Jedi, false, false, floorY, shakeX, shakeY);
         var sithTip = DrawActor(sim.Sith, true, false, floorY, shakeX, shakeY);
+
+        // Saber Motion Trails (Arcs)
+        if (sim.Jedi.SaberActive) DrawSaberArc(sim.Jedi, jediTip, shakeX, shakeY, Palette.Blue);
+        if (sim.Sith.SaberActive) DrawSaberArc(sim.Sith, sithTip, shakeX, shakeY, Palette.Red);
 
         // ... (Lighting & Rest same as before, just add shake offset)
         // Dynamic Lighting
@@ -481,6 +503,54 @@ public class SceneRenderer
             }
         }
         return tipPos;
+    }
+
+    private void DrawSaberArc(Actor actor, (int x, int y)? currentTip, int ox, int oy, string color)
+    {
+        if (!currentTip.HasValue) return;
+
+        // Calculate Previous Tip Position
+        // We need to reconstruct where the tip WAS based on PrevFX, PrevFY, and PrevPoseIndex
+        
+        float prevFX = actor.PrevFX;
+        float prevFY = actor.PrevFY;
+        int prevPoseIdx = actor.PrevPoseIndex;
+        bool isSith = (color == Palette.Red);
+        
+        var prevPose = Pose.Get(prevPoseIdx, isSith);
+        int dir = actor.FacingRight ? 1 : -1; // Assuming facing didn't flip instantly (limit of this simple system)
+
+        int sx = (int)(prevFX * _scaleX) + ox + (prevPose.Hand.Dx * dir);
+        int sy = (int)(prevFY * _scaleY) + oy + (prevPose.Hand.Dy); // Note: Dy is flipped in main draw, need to be careful
+        // Actually main draw uses: y + (isReflection ? -pose.Hand.Dy : pose.Hand.Dy);
+        // We are not drawing reflection arcs for now.
+        
+        int bdy = prevPose.Blade.Dy;
+        int bx = sx + (prevPose.Blade.Dx * dir * actor.SaberLength);
+        int by = sy + (bdy * actor.SaberLength);
+        
+        // previous tip pixel
+        int prevTipX = bx;
+        int prevTipY = by;
+
+        // If distance is large enough, draw a trail
+        int curTipX = currentTip.Value.x;
+        int curTipY = currentTip.Value.y;
+
+        int dx = curTipX - prevTipX;
+        int dy = curTipY - prevTipY;
+        int distSq = dx*dx + dy*dy;
+        
+        if (distSq > 4) // Only draw arc if moved significantly (> 2 pixels)
+        {
+             // Draw a line from Old Tip to New Tip?
+             // Better: Draw a "Fan" from Hand to interpolation of tips? 
+             // Simple version: Draw line between tips with low density char
+             DrawLine(prevTipX, prevTipY, curTipX, curTipY, '░', color);
+             
+             // Midpoint line for density
+             DrawLine((sx + prevTipX)/2, (sy + prevTipY)/2, (sx + curTipX)/2, (sy + curTipY)/2, '▒', color);
+        }
     }
 
     private void DrawWallDamage(int ox, int oy)

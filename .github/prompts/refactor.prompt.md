@@ -10,5 +10,5 @@ Improve the existing .NET 10 console application written in C#. Refactor the cod
 - Use self-contained methods, meaningful naming, and appropriate abstractions
 to make the codebase easier to understand and extend. 
 - Move repeated logic into reusable functions and eliminate any redundant or dead code. Create new data structures or classes if they improve organization.
-
+- do not over comment obvious code; focus on clarity through naming and structure.
 

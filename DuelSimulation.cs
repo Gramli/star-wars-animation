@@ -5,12 +5,18 @@ namespace StarWarsAnimation;
 
 public class DuelSimulation
 {
-    public const float LogicWidth = 80f;
-    public const float LogicHeight = 25f;
+    public const float LogicWidth = Constants.LogicWidth;
+    public const float LogicHeight = Constants.LogicHeight;
 
     public List<Vec2> Stars { get; private set; } = new();
-    public List<Spark> Sparks { get; private set; } = new();
-    public List<LightningBolt> LightningBolts { get; private set; } = new();
+    public ParticleManager Particles { get; private set; } = new();
+    
+    // Expose lists for Renderer via Manager
+    public List<Spark> Sparks => Particles.Sparks;
+    public List<Spark> Smoke => Particles.Smoke;
+    public List<LightningBolt> LightningBolts => Particles.LightningBolts;
+    public List<ScorchMark> ScorchMarks => Particles.ScorchMarks;
+
     public Actor Jedi { get; private set; }
     public Actor Sith { get; private set; }
 
@@ -22,10 +28,8 @@ public class DuelSimulation
     public float TimeScale { get; set; } = 1.0f;
     public bool IsDarkness { get; private set; } = false;
     
-    public List<Vec2> ScorchMarks { get; private set; } = new(); // Scars/Damage
     public bool WallDamaged { get; private set; }
     public List<DebrisChunk> DebrisChunks { get; private set; } = new();
-    public List<Spark> Smoke { get; private set; } = new();
     public string Subtitle { get; private set; } = "";
     
     public string CrawlText = 
@@ -52,7 +56,23 @@ console hangs in the balance...";
     private Phase _phase = Phase.OpeningCrawl;
     private int _blitzCount = 0;
 
-    public enum Phase { OpeningCrawl, Establishment, FirstExchange, Escalation, WallDestruction, ForceSequence, Blackout, SpeedBlitz, RestoreLights, SaberActionSequence, Climax, Resolution, FadeOut, Exit }
+    public enum Phase 
+    { 
+        OpeningCrawl,       // Star Wars style scrolling text
+        Establishment,      // Intro scene, characters enter
+        FirstExchange,      // Initial contact and first strike
+        Escalation,         // Fight intensifies
+        WallDestruction,    // Sith breaks the wall
+        ForceSequence,      // Force push/lightning sequence
+        Blackout,           // Lights go out
+        SpeedBlitz,         // Fast teleporting attacks in dark
+        RestoreLights,      // Lights come back on
+        SaberActionSequence,// Main choreography
+        Climax,             // Final struggle and kill
+        Resolution,         // Aftermath
+        FadeOut,            // Fade to black
+        Exit                // End program
+    }
 
     public void Initialize()
     {
@@ -70,8 +90,8 @@ console hangs in the balance...";
         _time += dt;
         _phaseTimer += dt;
         
-        SavePrevPos(Jedi);
-        SavePrevPos(Sith);
+        Jedi.SaveState();
+        Sith.SaveState();
 
         switch (_phase)
         {
@@ -90,11 +110,9 @@ console hangs in the balance...";
             case Phase.FadeOut: UpdateFadeOut(); break;
         }
 
-        SimulateCape(Sith, dt);
+        Sith.UpdateCape(dt);
         UpdateDebris(dt);
-        UpdateSparks(dt);
-        UpdateSmoke(dt);
-        UpdateLightning(dt);
+        Particles.Update(dt);
     }
     
     private void SetPhase(Phase p)
@@ -105,24 +123,13 @@ console hangs in the balance...";
 
     private void UpdateOpeningCrawl()
     {
-        // Crawl lasts 12 seconds (Slower read)
-        if (_phaseTimer > 12.0f) 
+        // Crawl lasts 20 seconds (Slower read)
+        if (_phaseTimer > 20.0f) 
         {
             _time = 0; 
             SetPhase(Phase.Establishment);
         }
     }
-
-    private void UpdateLightning(float dt)
-    {
-        for (int i = LightningBolts.Count - 1; i >= 0; i--)
-        {
-            LightningBolts[i].Life -= dt;
-            if (LightningBolts[i].Life <= 0) LightningBolts.RemoveAt(i);
-        }
-    }
-
-    private void SavePrevPos(Actor a) { a.PrevFX = a.FX; a.PrevFY = a.FY; }
 
     private void UpdateEstablishment()
     {
@@ -176,11 +183,11 @@ console hangs in the balance...";
             // Spark only on first frame of hit
             if (t >= 1.5f && t < 1.55f) 
             {
-                SpawnSparks(40, 12, 3); 
+                Particles.SpawnSparks(40, 12, 3); 
                 ShakeScreen = true;
             }
             ZoomLevel = 1.4f; 
-        } 
+        }
         else if (t >= 1.7f) 
         { 
             // Disengage
@@ -229,7 +236,7 @@ console hangs in the balance...";
             if (t > 0.2f) Subtitle = "SITH: BREAK!";
             
             // Wall Cracking Effect
-            if (_rng.NextDouble() > 0.7) SpawnSparks(78, (int)(5 + _rng.NextDouble() * 10), 1);
+            if (_rng.NextDouble() > 0.7) Particles.SpawnSparks(78, (int)(5 + _rng.NextDouble() * 10), 1);
             if (t > 0.5f) ShakeScreen = true;
         }
         // 1.5 - 5.5: The Barrage
@@ -264,7 +271,7 @@ console hangs in the balance...";
                 });
                 
                 // Explosion at wall source
-                SpawnSparks(78, (int)spawnY, 3); 
+                Particles.SpawnSparks(78, (int)spawnY, 3); 
             }
 
             // Jedi Defense Logic
@@ -334,7 +341,7 @@ console hangs in the balance...";
              {
                  var bolt = new LightningBolt { Life = 0.1f };
                  GenerateLightning(bolt, new Vec2(Sith.FX - 2, Sith.FY - 3), new Vec2(Jedi.FX + 1, Jedi.FY - 3));
-                 LightningBolts.Add(bolt);
+                 Particles.AddLightning(bolt);
              }
 
              // Jedi slides back slightly
@@ -342,7 +349,7 @@ console hangs in the balance...";
              Jedi.FX = 35 - (5 * progress);
              
              // Sparks at impact
-             if (_rng.NextDouble() > 0.5) SpawnSparks((int)Jedi.FX + 2, (int)Jedi.FY - 3, 1);
+             if (_rng.NextDouble() > 0.5) Particles.SpawnSparks((int)Jedi.FX + 2, (int)Jedi.FY - 3, 1);
         }
         else if (t < 3.5f) // Big Push / Jump Back
         {
@@ -390,34 +397,60 @@ console hangs in the balance...";
     private void UpdateSpeedBlitz(float dt)
     {
         float t = _phaseTimer;
-        int currentStep = (int)(t / 0.15f);
+        // Slower pace: 0.3s per clash (was 0.15s)
+        int currentStep = (int)(t / 0.35f);
         
         if (currentStep > _blitzCount)
         {
             _blitzCount = currentStep;
             
-            if (_blitzCount > 12) // End after 12 hits (~1.8s)
+            if (_blitzCount > 12) // End after 12 hits (~4.2s)
             {
                 SetPhase(Phase.RestoreLights);
                 return;
             }
 
-            // Random teleport logic
-            // Keep them somewhat centered
+            // Structured Teleport Logic - Keep somewhat centered but dynamic
             float cx = 40 + (float)(_rng.NextDouble() * 30 - 15);
-            float cy = 12 + (float)(_rng.NextDouble() * 10 - 5);
+            float cy = 12 + (float)(_rng.NextDouble() * 8 - 4);
             
-            Jedi.FX = cx - 2;
-            Sith.FX = cx + 2;
+            // Occasionally switch sides
+            bool jediLeft = _rng.NextDouble() > 0.3;
+            
+            Jedi.FX = cx + (jediLeft ? -2 : 2);
+            Sith.FX = cx + (jediLeft ? 2 : -2);
             Jedi.FY = cy;
             Sith.FY = cy;
+            Jedi.FacingRight = jediLeft;
+            Sith.FacingRight = !jediLeft;
+
+            // Structured Clash Poses (Attack/Block pairs)
+            // 0: High Attack / High Block
+            // 1: Low Attack / Low Block
+            // 2: Mid Clash
+            int clashType = _rng.Next(0, 3);
             
-            // Random poses
-            Jedi.PoseIndex = _rng.Next(1, 3);
-            Sith.PoseIndex = _rng.Next(1, 3);
+            if (clashType == 0) 
+            {
+                // High
+                Jedi.PoseIndex = jediLeft ? 1 : 2; // Attack / Guard
+                Sith.PoseIndex = jediLeft ? 2 : 1;
+            }
+            else if (clashType == 1)
+            {
+                // Low
+                Jedi.PoseIndex = jediLeft ? 11 : 5; // Crouch Attack / Guard
+                Sith.PoseIndex = jediLeft ? 5 : 11;
+            }
+            else
+            {
+                // Mid Clash
+                Jedi.PoseIndex = 5;
+                Sith.PoseIndex = 5;
+            }
             
             // Spark!
-            SpawnSparks((int)cx, (int)cy, 2);
+            Particles.SpawnSparks((int)cx, (int)cy, 3);
             ShakeScreen = true;
         }
         else
@@ -499,7 +532,7 @@ console hangs in the balance...";
         else if (t < 6.0f)
         {
             SetPoses(9, 1); 
-            if (t > 5.8f) SpawnSparks(60, 8, 2); 
+            if (t > 5.8f) Particles.SpawnSparks(60, 8, 2); 
         }
         else if (t < 7.0f)
         {
@@ -531,12 +564,12 @@ console hangs in the balance...";
              SetPoses(3, 3); // Lock
              ShakeScreen = true; // Struggle shake
              ZoomLevel = 1.2f;
-             if (_rng.NextDouble() > 0.6) SpawnSparks(40, 11, 1);
+             if (_rng.NextDouble() > 0.6) Particles.SpawnSparks(40, 11, 1);
         }
         // SLOW MOTION MOMENT
         else if (t < 2.0f) 
         {
-             TimeScale = 0.1f; 
+             TimeScale = 0.4f; // Was 0.1f (too slow)
              ZoomLevel = 1.4f; 
              ShakeScreen = false; 
         }
@@ -553,7 +586,7 @@ console hangs in the balance...";
              
              // Visuals
              ShakeScreen = true;
-             if (t < 2.5f) SpawnSparks(41, 11, 8); // Intense sparks at impact point
+             if (t < 2.5f) Particles.SpawnSparks(41, 11, 8); // Intense sparks at impact point
              
              // Flash only on the frame of impact
              if (t >= 2.0f && t < 2.1f) FlashScreen = true; 
@@ -609,7 +642,7 @@ console hangs in the balance...";
             Jedi.FX = 35; Sith.FX = 45; 
             SetPoses(1, 1); 
         }
-        else if (t < 1.0f) { SpawnSparks(40, 13, 1); }
+        else if (t < 1.0f) { Particles.SpawnSparks(40, 13, 1); }
     }
 
     private void Beat2_Riposte(float t)
@@ -629,12 +662,12 @@ console hangs in the balance...";
         { 
             Jedi.FX = 38; Sith.FX = 42; 
             SetPoses(1, 1); 
-            SpawnSparks(40, 10, 5);
+            Particles.SpawnSparks(40, 10, 5);
             ShakeScreen = true; 
             ZoomLevel = 1.5f; 
             
             // Permanent Scorch Mark on Floor
-            if (t > 2.5f && t < 2.55f) ScorchMarks.Add(new Vec2(40, 16));
+            if (t > 2.5f && t < 2.55f) Particles.AddScorchMark(new Vec2(40, 16));
         }
         else if (t < 3.2f) 
         { 
@@ -661,17 +694,17 @@ console hangs in the balance...";
         {
              Jedi.FX = 38; Sith.FX = 42;
              SetPoses(1, 2); // Attack/Guard
-             if (t < 4.55f) { SpawnSparks(40, 10, 2); ShakeScreen = true; }
+             if (t < 4.55f) { Particles.SpawnSparks(40, 10, 2); ShakeScreen = true; }
         }
         else if (t < 4.9f) // Low Hit
         {
              SetPoses(11, 1); // Crouch-Attack / Attack
-             if (t < 4.75f) { SpawnSparks(40, 14, 2); }
+             if (t < 4.75f) { Particles.SpawnSparks(40, 14, 2); }
         }
         else if (t < 5.1f) // Mid Hit
         {
              SetPoses(1, 1);
-             if (t < 4.95f) { SpawnSparks(40, 12, 2); ShakeScreen = true; }
+             if (t < 4.95f) { Particles.SpawnSparks(40, 12, 2); ShakeScreen = true; }
         }
         else if (t < 5.5f) { SetPoses(2, 2); ShakeScreen = false; } // Reset
     }
@@ -688,7 +721,7 @@ console hangs in the balance...";
              Jedi.FY = 15 - (float)Math.Sin(jp * Math.PI) * 9;
              Jedi.FX = Lerp(38, 50, jp); 
              
-             if (jp > 0.4f && jp < 0.6f && jp < 0.45f) SpawnSparks(35, 12, 3);
+             if (jp > 0.4f && jp < 0.6f && jp < 0.45f) Particles.SpawnSparks(35, 12, 3);
         }
         else // 6.5 - 7.0 Land & Face
         {
@@ -705,7 +738,7 @@ console hangs in the balance...";
         {
              Jedi.FX = 42; Sith.FX = 38;
              SetPoses(1, 1);
-             if (t < 7.35f) { SpawnSparks(40, 12, 5); ShakeScreen = true; ZoomLevel = 1.4f; }
+             if (t < 7.35f) { Particles.SpawnSparks(40, 12, 5); ShakeScreen = true; ZoomLevel = 1.4f; }
         }
     }
 
@@ -737,37 +770,6 @@ console hangs in the balance...";
         a.SaberLength = length;
     }
 
-    private void SimulateCape(Actor a, float dt)
-    {
-        float anchorX = a.FX - (a.FacingRight ? 1.0f : -1.0f); 
-        float anchorY = a.FY - 3.0f;
-        float velX = (a.FX - a.PrevFX) / dt;
-        float velY = (a.FY - a.PrevFY) / dt;
-        
-        // Default hanging position (Gravity)
-        float targetX = anchorX - (a.FacingRight ? 1.5f : -1.5f);
-        float targetY = anchorY + 4.0f;
-
-        // Physics: Drag
-        targetX -= velX * 0.15f; // Drag against movement
-        targetY -= velY * 0.15f; // Drag against jump
-
-        // Force Action Reaction (Wind from power)
-        if (a.PoseIndex == 6) // Casting Force
-        {
-             targetX -= (a.FacingRight ? 4.0f : -4.0f); // Blows back violently
-             targetY -= 2.0f; // Lift
-        }
-        else if (velY < -5.0f) // Jumping up
-        {
-             targetY += 1.0f; // Pull down
-        }
-
-        // Smooth Damping
-        a.CapeTail.X += (targetX - a.CapeTail.X) * 8.0f * dt;
-        a.CapeTail.Y += (targetY - a.CapeTail.Y) * 8.0f * dt;
-    }
-
     private void UpdateDebris(float dt)
     {
         for (int i = 0; i < DebrisChunks.Count; i++)
@@ -794,7 +796,7 @@ console hangs in the balance...";
                 if (dx > -1.0f && dx < 7.0f && Math.Abs(dy) < 6.0f)
                 {
                     d.Active = false;
-                    SpawnSparks((int)d.Pos.X, (int)d.Pos.Y, 8); // MASSIVE sparks
+                    Particles.SpawnSparks((int)d.Pos.X, (int)d.Pos.Y, 8); // MASSIVE sparks
                     ShakeScreen = true;
                 }
             }
@@ -806,9 +808,9 @@ console hangs in the balance...";
                 d.Pos.Y = 16;
                 if (d.Pos.X > 0 && d.Pos.X < LogicWidth) // Only mark if on screen
                 {
-                    ScorchMarks.Add(d.Pos); 
-                    SpawnSparks((int)d.Pos.X, (int)d.Pos.Y, 2);
-                    SpawnSmoke((int)d.Pos.X, (int)d.Pos.Y, 3);
+                    Particles.AddScorchMark(d.Pos); 
+                    Particles.SpawnSparks((int)d.Pos.X, (int)d.Pos.Y, 2);
+                    Particles.SpawnSmoke((int)d.Pos.X, (int)d.Pos.Y, 3);
                 }
             }
 
@@ -817,76 +819,5 @@ console hangs in the balance...";
 
         // Cleanup
         if (DebrisChunks.Count > 0 && DebrisChunks[0].Pos.X < -10) DebrisChunks.RemoveAt(0);
-    }
-
-    private void UpdateSmoke(float dt)
-    {
-        for (int i = Smoke.Count - 1; i >= 0; i--)
-        {
-            var s = Smoke[i];
-            s.Pos.Y -= s.Vel.Y * dt; // Rise up
-            s.Pos.X += s.Vel.X * dt; // Drift
-            s.Life -= dt;
-            Smoke[i] = s;
-
-            // FIX: Remove smoke if it drifts off screen to the left/right or dies
-            if (s.Life <= 0 || s.Pos.X < 0 || s.Pos.X > LogicWidth) Smoke.RemoveAt(i);
-        }
-        
-        // Ambient smoke from scorch marks
-        if (_rng.NextDouble() > 0.9)
-        {
-            foreach(var sm in ScorchMarks)
-            {
-                // Only spawn if valid
-                if (sm.X > 0 && sm.X < LogicWidth && _rng.NextDouble() > 0.95) 
-                    SpawnSmoke((int)sm.X, (int)sm.Y, 1);
-            }
-        }
-    }
-
-    private void SpawnSmoke(int x, int y, int count)
-    {
-        if (x < 0 || x > LogicWidth) return; // Prevent garbage smoke
-        
-        for (int i = 0; i < count; i++)
-        {
-            Smoke.Add(new Spark
-            {
-                Pos = new Vec2(x + (float)(_rng.NextDouble()*2-1), y),
-                Vel = new Vec2((float)(_rng.NextDouble()*1-0.5), (float)(_rng.NextDouble()*2 + 1)), // Upward
-                Life = (float)(_rng.NextDouble() * 2.0 + 1.0)
-            });
-        }
-    }
-
-    private void UpdateSparks(float dt)
-    {
-        for (int i = Sparks.Count - 1; i >= 0; i--)
-        {
-            var s = Sparks[i];
-            s.Pos.X += s.Vel.X * dt * 20;
-            s.Pos.Y += s.Vel.Y * dt * 10;
-            s.Vel.Y += 20f * dt; 
-            s.Life -= dt;
-            Sparks[i] = s;
-
-            if (s.Life <= 0) Sparks.RemoveAt(i);
-        }
-    }
-
-    private void SpawnSparks(int x, int y, int count)
-    {
-        for (int i = 0; i < count; i++)
-        {
-            float angle = (float)(_rng.NextDouble() * Math.PI * 2);
-            float speed = (float)(_rng.NextDouble() * 1.5 + 0.5);
-            Sparks.Add(new Spark
-            {
-                Pos = new Vec2(x, y),
-                Vel = new Vec2((float)Math.Cos(angle) * speed, (float)Math.Sin(angle) * speed - 1.0f),
-                Life = (float)(_rng.NextDouble() * 0.3 + 0.1)
-            });
-        }
     }
 }
