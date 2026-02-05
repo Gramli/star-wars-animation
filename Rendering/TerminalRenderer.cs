@@ -49,15 +49,15 @@ namespace StarWarsAnimation.Rendering
 
         public void Clear(string color = "\u001b[30m") // Black background
         {
-            for (int y = 0; y < Height; y++)
-                for (int x = 0; x < Width; x++)
-                {
-                    _buffer[y, x].Char = ' ';
-                    _buffer[y, x].Color = color;
-                }
+            FillBuffer(' ', color);
         }
 
         public void Fill(char c, string color)
+        {
+            FillBuffer(c, color);
+        }
+
+        private void FillBuffer(char c, string color)
         {
             for (int y = 0; y < Height; y++)
                 for (int x = 0; x < Width; x++)
