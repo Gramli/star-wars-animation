@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Threading;
+using StarWarsAnimation.Simulation;
+using StarWarsAnimation.Rendering;
 
 namespace StarWarsAnimation;
 
@@ -11,6 +13,7 @@ class Program
 
     static void Main(string[] args)
     {
+        Console.OutputEncoding = System.Text.Encoding.UTF8;
         Console.Title = "Duel of the CLI";
         
         var simulation = new DuelSimulation();
@@ -20,23 +23,43 @@ class Program
 
         var stopwatch = Stopwatch.StartNew();
         var prevTime = stopwatch.Elapsed.TotalSeconds;
+        double accumulator = 0.0;
 
         try
         {
             while (!simulation.IsFinished)
             {
                 var now = stopwatch.Elapsed.TotalSeconds;
-                var dt = (float)(now - prevTime);
+                var frameTime = now - prevTime;
+                prevTime = now;
+                
+                accumulator += frameTime;
 
-                if (dt >= FrameTime)
+                // Input handling
+                if (Console.KeyAvailable)
                 {
-                    prevTime = now;
-                    simulation.Update(dt);
+                    var key = Console.ReadKey(true).Key;
+                    if (key == ConsoleKey.Spacebar)
+                    {
+                        simulation.SkipPhase();
+                    }
+                }
+
+                bool updated = false;
+                while (accumulator >= FrameTime)
+                {
+                    simulation.Update(FrameTime);
+                    accumulator -= FrameTime;
+                    updated = true;
+                }
+
+                if (updated)
+                {
                     renderer.Render(simulation);
                 }
                 else
                 {
-                    Thread.Sleep(5);
+                    Thread.Sleep(1);
                 }
             }
         }

@@ -1,4 +1,4 @@
-namespace StarWarsAnimation
+namespace StarWarsAnimation.Core
 {
     public static class Constants
     {

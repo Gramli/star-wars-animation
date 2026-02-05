@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace StarWarsAnimation
+namespace StarWarsAnimation.Entities
 {
     public struct BodyPart
     {

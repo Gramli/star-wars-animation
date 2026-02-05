@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using StarWarsAnimation.Core;
+using StarWarsAnimation.Entities;
 
-namespace StarWarsAnimation
+namespace StarWarsAnimation.Simulation
 {
     public class ParticleManager
     {

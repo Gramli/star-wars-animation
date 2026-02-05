@@ -1,8 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.Text;
+using System.Collections.Generic;
+using StarWarsAnimation.Core;
 
-namespace StarWarsAnimation
+namespace StarWarsAnimation.Rendering
 {
     internal sealed class TerminalRenderer
     {
@@ -98,8 +99,8 @@ namespace StarWarsAnimation
                     int dy = y - ly;
                     if (dx*dx + dy*dy <= r2)
                     {
-                        // Only light up background (Dim) or floor/walls
-                        if (_buffer[y, x].Color == Palette.Dim)
+                        // Only light up background (Dim), White (Floor), or Empty
+                        if (_buffer[y, x].Color == Palette.Dim || _buffer[y, x].Color == Palette.White)
                         {
                             _buffer[y, x].Color = color;
                         }
