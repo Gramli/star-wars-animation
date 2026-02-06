@@ -678,7 +678,11 @@ namespace StarWarsAnimation.Simulation
             SetPoses(0, 4); 
             SetSaber(Sith, false, 0);
             // Turn off Jedi saber after a moment
-            if (t > 2.0f) SetSaber(Jedi, false, 0);
+            if (t > 2.0f) 
+            {
+                SetSaber(Jedi, false, 0);
+                Subtitle = "May the Source be with you.";
+            }
             
             if (t > 4.0f) SetPhase(Phase.FadeOut);
         }

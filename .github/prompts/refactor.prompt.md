@@ -19,6 +19,7 @@ Refactor the code to achieve the following:
 - Extract repeated logic into reusable functions or classes.
 - Introduce new abstractions, data structures, or types where they improve clarity.
 - Organize code into logical folders and files (e.g., rendering, animation, timing, primitives).
+- Clean up any technical debt, such as unused variables, redundant code, or inconsistent formatting.
 
 ### Performance
 - Optimize rendering loops and frame updates where appropriate.

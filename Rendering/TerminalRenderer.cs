@@ -5,7 +5,7 @@ using StarWarsAnimation.Core;
 
 namespace StarWarsAnimation.Rendering
 {
-    internal sealed class TerminalRenderer
+    public sealed class TerminalRenderer
     {
         public readonly int Width;
         public readonly int Height;
@@ -82,6 +82,22 @@ namespace StarWarsAnimation.Rendering
             for (int i = 0; i < text.Length; i++)
             {
                 Draw(x + i, y, text[i], color);
+            }
+        }
+
+        public void DrawLine(int x0, int y0, int x1, int y1, char c, string color)
+        {
+            int dx = Math.Abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+            int dy = -Math.Abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+            int err = dx + dy, e2; 
+            
+            while (true)
+            {
+                Draw(x0, y0, c, color);
+                if (x0 == x1 && y0 == y1) break;
+                e2 = 2 * err;
+                if (e2 >= dy) { err += dy; x0 += sx; }
+                if (e2 <= dx) { err += dx; y0 += sy; }
             }
         }
 
