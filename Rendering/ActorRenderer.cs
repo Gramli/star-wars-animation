@@ -127,6 +127,24 @@ namespace StarWarsAnimation.Rendering
                 int tipX = sx + (bladeDx * dir);
                 int tipY = sy + (bdy * actor.SaberLength);
                 
+                // Fix for Top View: Prevent saber from floating "below" the character
+                if (isTopDown)
+                {
+                    // In top view, Y represents "forward/backward" relative to camera, 
+                    // not "up/down". We need to project the saber length differently.
+                    // Simple fix: Force saber to be drawn relative to the hand position 
+                    // without the heavy vertical foreshortening that pushes it down.
+                    
+                    int forwardFactor = pose.Blade.Dy < 0 ? -1 : 1; 
+                    // If blade points up (Dy < 0), it should point "forward" (up on screen) in top view
+                    // If blade points down, it points "backward" (down on screen)
+                    
+                    tipY = sy + (forwardFactor * (int)(actor.SaberLength * _scaleY * 0.3f));
+                    // Pull the saber start point closer to the center body if needed
+                    sx = x + (dir * 2); 
+                    sy = y;
+                }
+                
                 tipPos = (tipX, tipY);
                 
                 int dSx = tipX - sx;
@@ -262,7 +280,7 @@ namespace StarWarsAnimation.Rendering
 
         public void DrawShadows(float angle, int floorScreenY, (int sx, int sy) jediPos, (int sx, int sy) sithPos)
         {
-            if (angle <= 0.3f) return;
+            if (angle <= 0.3f || angle > 1.1f) return;
 
             int jx = jediPos.sx;
             int sx = sithPos.sx;
