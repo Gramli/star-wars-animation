@@ -93,14 +93,17 @@ namespace StarWarsAnimation.Entities
                     p.Blade = new BodyPart(-1, -1, '╲');
                     break;
 
-                case 3: // Lock
-                    p.Head = new BodyPart(1, -4, p.Head.Char);
-                    p.TorsoTop = new BodyPart(1, -3, '█');
+                case 3: // Lock (Treasure Cross)
+                    p.Head = new BodyPart(0, -4, p.Head.Char);
+                    p.TorsoTop = new BodyPart(0, -3, '█');
                     p.LegL = new BodyPart(-2, -1, '╱');
                     p.LegR = new BodyPart(2, -1, '╲');
-                    p.ArmR = new BodyPart(1, -3, '─');
-                    p.Hand = new BodyPart(1, -3);
-                    p.Blade = new BodyPart(1, 0, '─');
+                    // Treasure Cross: Arms extended forward-up
+                    p.ArmR = new BodyPart(2, -4, '╱');
+                    p.Hand = new BodyPart(2, -4);
+                    // Blade sloped UP and AWAY to form X with opponent
+                    // Opponent will mirror, creating the X
+                    p.Blade = new BodyPart(1, -1, '╱'); 
                     break;
 
                 case 4: // Kneel

@@ -448,9 +448,15 @@ namespace StarWarsAnimation.Simulation
                 // Structured Clash Poses (Attack/Block pairs)
                 // 0: High Attack / High Block
                 // 1: Low Attack / Low Block
-                // 2: Mid Clash
-                int clashType = _rng.Next(0, 3);
+                // 2: Mid Clash (Pose 5)
+                // 3: Saber Lock (Pose 3) - Guaranteed Cross!
                 
+                int clashType = _rng.Next(0, 4);
+                
+                // Force at least 2 crosses (locks) in the sequence
+                // Blitz runs 0..12. Let's force it on step 4 and 9
+                if (_blitzCount == 4 || _blitzCount == 9) clashType = 3;
+
                 if (clashType == 0) 
                 {
                     // High
@@ -463,15 +469,29 @@ namespace StarWarsAnimation.Simulation
                     Jedi.PoseIndex = jediLeft ? 11 : 5; // Crouch Attack / Guard
                     Sith.PoseIndex = jediLeft ? 5 : 11;
                 }
-                else
+                else if (clashType == 2)
                 {
                     // Mid Clash
                     Jedi.PoseIndex = 5;
                     Sith.PoseIndex = 5;
                 }
+                else
+                {
+                    // Saber Lock (Crossing) - Ensure close proximity
+                    Jedi.FX = cx - 1.5f; // Closer than usual (was +/- 2)
+                    Sith.FX = cx + 1.5f;
+                    
+                    Jedi.PoseIndex = 3; // Lock Pose
+                    Sith.PoseIndex = 3; // Lock Pose
+                    
+                    // Extra sparks for the cross
+                    Particles.SpawnSparks((int)cx, (int)cy, 8);
+                }
                 
-                // Spark!
-                Particles.SpawnSparks((int)cx, (int)cy, 3);
+                if (clashType != 3) // Normal spark logic for non-locks
+                {
+                    Particles.SpawnSparks((int)cx, (int)cy, 3);
+                }
                 ShakeScreen = true;
             }
             else
@@ -601,6 +621,10 @@ namespace StarWarsAnimation.Simulation
                  // PI/2 = 1.57 rad.
                  float maxAngle = 1.4f; // Nearly 90 degrees
                  CameraAngle = (float)Math.Sin(spinProgress * Math.PI) * maxAngle;
+                 
+                 // Display Camera Angle in Subtitle
+                 int deg = (int)(CameraAngle * (180.0f / Math.PI));
+                 Subtitle = $"CAM: {deg}°";
             }
             // 1.5: THE KILL STROKE
             else if (t < 6.2f) // Shifted timeline

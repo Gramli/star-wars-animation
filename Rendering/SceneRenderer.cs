@@ -782,7 +782,8 @@ namespace StarWarsAnimation.Rendering
             // Z-Depth simulation (Screen Y shift)
             // Back limbs (Left) move UP (negative Y)
             // Front limbs (Right) move DOWN (positive Y)
-            float zFactor = 1.2f * angleSin; // Reduced from 3.0 to fix "too wide" top view
+            // Increased factor to 4.5 to create distinct "Top View" spread
+            float zFactor = 4.5f * angleSin; 
 
             bool reflect = isReflection;
             string color = mainColor;
@@ -839,6 +840,7 @@ namespace StarWarsAnimation.Rendering
             }
             else
             {
+                 // In Top Down, emphasize shoulders/arms spread
                  DrawPart3D(pose.ArmL, -1);
                  DrawPart3D(pose.TorsoTop, 0);
                  if (actor.PoseIndex != 3) DrawPart3D(pose.ArmR, 1);
