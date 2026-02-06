@@ -1,7 +1,5 @@
-using System;
-using System.Text;
-using System.Collections.Generic;
 using StarWarsAnimation.Core;
+using System.Text;
 
 namespace StarWarsAnimation.Rendering
 {

@@ -1,5 +1,3 @@
-using System;
-
 namespace StarWarsAnimation.Rendering
 {
     public static class RendererUtils

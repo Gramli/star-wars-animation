@@ -1,5 +1,3 @@
-using System;
-using StarWarsAnimation.Core;
 using StarWarsAnimation.Entities;
 
 namespace StarWarsAnimation.Rendering

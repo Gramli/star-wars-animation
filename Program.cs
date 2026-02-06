@@ -1,8 +1,6 @@
-﻿using System;
-using System.Diagnostics;
-using System.Threading;
+﻿using StarWarsAnimation.Rendering;
 using StarWarsAnimation.Simulation;
-using StarWarsAnimation.Rendering;
+using System.Diagnostics;
 
 namespace StarWarsAnimation;
 
@@ -14,7 +12,7 @@ class Program
     static void Main(string[] args)
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
-        Console.Title = "Duel of the CLI";
+        Console.Title = "🎬 Duel of the CLI";
         
         var simulation = new DuelSimulation();
         simulation.Initialize();

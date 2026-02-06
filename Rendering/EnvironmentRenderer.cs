@@ -76,6 +76,27 @@ namespace StarWarsAnimation.Rendering
             }
         }
 
+        public void DrawStars(List<Vec2> stars, CameraTransform transform)
+        {
+            if (transform.Angle >= 0.8f) return;
+
+            foreach (var s in stars)
+            {
+                var starPos = transform.ToScreen(s.X, s.Y);
+                if (starPos.sx >= 0 && starPos.sx < _term.Width && starPos.sy >= 0 && starPos.sy < _term.Height)
+                {
+                    char current = _bgChars[starPos.sy, starPos.sx];
+                    // Only draw star if background is empty space (' ') AND it is in the upper part of the screen (the window)
+                    // The ceiling ends around y=2 logic units, floor is around y=15. 
+                    // Let's assume the window is the "sky" area above the floor horizon.
+                    if (current == ' ' && starPos.sy < (int)(15 * _scaleY)) 
+                    {
+                        _term.Draw(starPos.sx, starPos.sy, '.', Palette.Dim);
+                    }
+                }
+            }
+        }
+
         public void DrawBackground(CameraTransform transform)
         {
             if (transform.Angle >= 0.8f)

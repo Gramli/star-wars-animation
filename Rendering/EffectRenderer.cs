@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using StarWarsAnimation.Core;
 using StarWarsAnimation.Entities;
 using StarWarsAnimation.Simulation;
@@ -9,14 +7,11 @@ namespace StarWarsAnimation.Rendering
     public class EffectRenderer
     {
         private readonly TerminalRenderer _term;
-        private readonly float _scaleX;
-        private readonly float _scaleY;
 
-        public EffectRenderer(TerminalRenderer term, float scaleX, float scaleY)
+        public EffectRenderer(TerminalRenderer term)
         {
             _term = term;
-            _scaleX = scaleX;
-            _scaleY = scaleY;
+
         }
 
         public void DrawScorchMarks(IEnumerable<ScorchMark> scorchMarks, CameraTransform transform)

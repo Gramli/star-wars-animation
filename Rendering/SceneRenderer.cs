@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using StarWarsAnimation.Core;
-using StarWarsAnimation.Entities;
 using StarWarsAnimation.Simulation;
 
 namespace StarWarsAnimation.Rendering
@@ -30,7 +27,7 @@ namespace StarWarsAnimation.Rendering
 
             _envRenderer = new EnvironmentRenderer(_term, _scaleX, _scaleY);
             _actorRenderer = new ActorRenderer(_term, _scaleX, _scaleY);
-            _effectRenderer = new EffectRenderer(_term, _scaleX, _scaleY);
+            _effectRenderer = new EffectRenderer(_term);
         }
 
         public void Render(DuelSimulation sim)
@@ -103,6 +100,9 @@ namespace StarWarsAnimation.Rendering
         {
             var (shakeX, shakeY) = RendererUtils.GetShakeOffset(sim.ShakeScreen);
             var transform = new CameraTransform(_scaleX, _scaleY, LogicWidth, LogicHeight, sim.ZoomLevel, sim.CameraAngle, sim.CameraFocus, shakeX, shakeY);
+
+            // Draw Stars in Space Background
+            _envRenderer.DrawStars(sim.Stars, transform);
 
             // Draw Background & Environment
             _envRenderer.DrawBackground(transform);
