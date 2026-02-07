@@ -52,3 +52,6 @@ This project was built for the **GitHub Copilot CLI Challenge**.
 Copilot wasn't just a code generator here; it was a **creative collaborator**. We brainstormed "Oscar-worthy" effects like volumetric lighting and motion trails. We struggled together with camera rotation math. We pivoted, refactored, and polished until the terminal felt alive.
 
 Enjoy the show! May the Source be with you.
+
+> **Disclaimer:** 
+Star Wars is a trademark of Lucasfilm Ltd. and Disney. This is a fan-made project and is not affiliated, sponsored, or approved by Lucasfilm, Disney, or any of their licensees. This project is for non-profit, recreational use only.
