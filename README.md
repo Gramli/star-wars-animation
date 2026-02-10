@@ -43,7 +43,11 @@ Run the animation from the project root:
 dotnet run
 ```
 
-**Tip**: A font with good Unicode support (like Cascadia Code) is recommended. **Visual Studio Console** is known to render the block characters particularly well.
+**Note:**
+- Use a font with good Unicode support (e.g., **Cascadia Code**).
+- The **Visual Studio Console** or **VS Code terminal** render the block characters best -> they’re true Jedi-level terminals 😄
+
+> ⚠️ The animation may not display correctly in the default Windows Command Prompt (`cmd.exe`) or other terminals with limited Unicode support.
 
 ## 🤖 Built with GitHub Copilot CLI
 
