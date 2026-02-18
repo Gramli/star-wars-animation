@@ -2,6 +2,13 @@
 
 *A cinematic lightsaber duel rendered entirely in your terminal with Unicode characters.*
 
+## 📽️ Teaser
+*The full animation is a bit too long for readme, so I prepared a short “teaser” instead.*
+
+![Duel of the CLI - Teaser](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/vr46bo9ajojducqrqj4a.gif)
+
+#### [View the complete version (~65 seconds)](https://github.com/Gramli/star-wars-animation/blob/master/Assets/star-wars-animation-full.gif)
+
 ## 🌟 Project Overview
 
 In a world of productive CLI tools and serious codebases, a question arose: "What if we built an actual movie scene using **GitHub Copilot CLI**?"
