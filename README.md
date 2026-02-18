@@ -1,4 +1,4 @@
-# # Star Wars Lightsaber Duel in the Terminal ⚔️
+# Star Wars Lightsaber Duel in the Terminal ⚔️
 
 *A cinematic lightsaber duel rendered entirely in your terminal with Unicode characters.*
 
